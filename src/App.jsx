@@ -19,6 +19,7 @@ import ScenarioPanel from './components/ScenarioPanel';
 import ExportMenu from './components/ExportMenu';
 import MultiStrikePanel from './components/MultiStrikePanel';
 import AIInterpretation from './components/AIInterpretation';
+import AnimatedPLChart from './components/AnimatedPLChart';
 
 // Data
 import { presets, getPresetById } from './data/presets';
@@ -366,6 +367,20 @@ export default function App() {
             currentPrice={currentPrice}
             strikePrice={strikePrice}
             breakeven={breakeven}
+            minPrice={minPrice}
+            maxPrice={maxPrice}
+            minPL={minPL}
+            maxPL={maxPL}
+          />
+
+          <AnimatedPLChart
+            currentPrice={currentPrice}
+            strikePrice={strikePrice}
+            daysToExpiry={daysToExpiry}
+            r={r}
+            sigma={sigma}
+            isCall={isCall}
+            investmentAmount={investmentAmount}
             minPrice={minPrice}
             maxPrice={maxPrice}
             minPL={minPL}
