@@ -6,6 +6,8 @@ import { priceAtSigma } from '../utils/probability';
  */
 export default function AxisControls({
   currentPrice,
+  strikePrice,
+  breakeven,
   T,
   r,
   sigma,
@@ -28,6 +30,7 @@ export default function AxisControls({
   };
 
   const presets = [
+    { label: 'Super Focused', type: 'focused', description: 'Tight range around key prices' },
     { label: 'Conservative', sigmas: 1, description: '±1σ (68% range)' },
     { label: 'Normal', sigmas: 2, description: '±2σ (95% range)' },
     { label: 'Wide', sigmas: 3, description: '±3σ (99% range)' },
@@ -35,18 +38,32 @@ export default function AxisControls({
   ];
 
   const handlePreset = (preset) => {
-    if (preset.sigmas) {
+    if (preset.type === 'focused') {
+      // Super Focused: tight range around current, strike, and breakeven
+      const keyPrices = [currentPrice, strikePrice, breakeven].filter(p => p > 0);
+      const minKey = Math.min(...keyPrices);
+      const maxKey = Math.max(...keyPrices);
+      const padding = (maxKey - minKey) * 0.15 || currentPrice * 0.05; // 15% padding or 5% of current
+      onMinPriceChange(Math.round((minKey - padding) * 100) / 100);
+      onMaxPriceChange(Math.round((maxKey + padding) * 100) / 100);
+      // Tighter P&L range for focused view
+      onMinPLChange(Math.round(-investmentAmount * 0.5));
+      onMaxPLChange(Math.round(investmentAmount * 0.5));
+    } else if (preset.sigmas) {
       const range = getPresetRange(preset.sigmas);
       onMinPriceChange(Math.round(range.min * 100) / 100);
       onMaxPriceChange(Math.round(range.max * 100) / 100);
+      // Auto-adjust P&L based on price range
+      onMinPLChange(Math.round(-investmentAmount));
+      onMaxPLChange(Math.round(investmentAmount * 2));
     } else {
       // Full range
       onMinPriceChange(Math.round(currentPrice * 0.1 * 100) / 100);
       onMaxPriceChange(Math.round(currentPrice * 2 * 100) / 100);
+      // Auto-adjust P&L based on price range
+      onMinPLChange(Math.round(-investmentAmount));
+      onMaxPLChange(Math.round(investmentAmount * 2));
     }
-    // Auto-adjust P&L based on price range
-    onMinPLChange(Math.round(-investmentAmount));
-    onMaxPLChange(Math.round(investmentAmount * 2));
   };
 
   const handleReset = () => {

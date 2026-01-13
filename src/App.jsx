@@ -17,10 +17,13 @@ import RiskRewardPanel from './components/RiskRewardPanel';
 import TimeDecayChart from './components/TimeDecayChart';
 import ScenarioPanel from './components/ScenarioPanel';
 import ExportMenu from './components/ExportMenu';
+import MultiStrikePanel from './components/MultiStrikePanel';
+import AIInterpretation from './components/AIInterpretation';
 
 // Data
 import { presets, getPresetById } from './data/presets';
 import { fetchQuote, getEstimatedIV } from './api/stockQuote';
+import { loadGroqApiKey } from './api/groqApi';
 
 export default function App() {
   // Main parameters
@@ -136,8 +139,11 @@ export default function App() {
     setMaxPL(Math.round(investmentAmount * 2));
   }, [currentPrice, T, sigma, investmentAmount]);
 
-  // Load URL parameters on mount
+  // Load URL parameters and initialize on mount
   useEffect(() => {
+    // Load Groq API key from localStorage
+    loadGroqApiKey();
+
     const urlParams = parseURLParams();
     if (urlParams) {
       setCurrentPrice(urlParams.currentPrice);
@@ -329,6 +335,8 @@ export default function App() {
         {/* Axis Controls */}
         <AxisControls
           currentPrice={currentPrice}
+          strikePrice={strikePrice}
+          breakeven={breakeven}
           T={T}
           r={r}
           sigma={sigma}
@@ -370,9 +378,10 @@ export default function App() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2">
+        <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-800 pb-2">
           {[
-            { id: 'analysis', label: 'Risk/Reward Analysis' },
+            { id: 'analysis', label: 'Risk/Reward' },
+            { id: 'compare', label: 'Compare Strikes' },
             { id: 'greeks', label: 'Greeks' },
             { id: 'decay', label: 'Time Decay' },
             { id: 'scenarios', label: 'Scenarios' },
@@ -393,10 +402,45 @@ export default function App() {
 
         {/* Tab Content */}
         {activeTab === 'analysis' && (
-          <RiskRewardPanel
-            stats={stats}
+          <div className="space-y-4">
+            <RiskRewardPanel
+              stats={stats}
+              investmentAmount={investmentAmount}
+              totalPremiumPaid={totalPremiumPaid}
+              currentPrice={currentPrice}
+              strikePrice={strikePrice}
+              premium={premium}
+              sharesOwned={sharesOwned}
+              optionShares={optionShares}
+              isCall={isCall}
+              impliedVol={impliedVol}
+              daysToExpiry={daysToExpiry}
+            />
+            <AIInterpretation
+              symbol={symbol}
+              currentPrice={currentPrice}
+              strikePrice={strikePrice}
+              premium={premium}
+              breakeven={breakeven}
+              daysToExpiry={daysToExpiry}
+              impliedVol={impliedVol}
+              isCall={isCall}
+              stats={stats}
+              greeks={greeks}
+            />
+          </div>
+        )}
+
+        {activeTab === 'compare' && (
+          <MultiStrikePanel
+            currentPrice={currentPrice}
+            daysToExpiry={daysToExpiry}
+            impliedVol={impliedVol}
+            riskFreeRate={riskFreeRate}
             investmentAmount={investmentAmount}
-            totalPremiumPaid={totalPremiumPaid}
+            isCall={isCall}
+            minPrice={minPrice}
+            maxPrice={maxPrice}
           />
         )}
 
