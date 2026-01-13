@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatPrice } from '../utils/statistics';
 
 /**
@@ -13,6 +13,10 @@ export default function ControlPanel({
   investmentAmount,
   isCall,
   symbol,
+  quoteStatus, // 'live', 'fallback', 'loading', 'error'
+  quoteName,
+  quoteChange,
+  quoteChangePercent,
   onCurrentPriceChange,
   onStrikePriceChange,
   onDaysToExpiryChange,
@@ -27,7 +31,12 @@ export default function ControlPanel({
   presets,
   onLoadPreset,
 }) {
-  const [symbolInput, setSymbolInput] = useState(symbol || '');
+  const [symbolInput, setSymbolInput] = useState(symbol || 'AAPL');
+
+  // Sync symbol input when symbol prop changes
+  useEffect(() => {
+    if (symbol) setSymbolInput(symbol);
+  }, [symbol]);
 
   const handleSymbolSubmit = (e) => {
     e.preventDefault();
@@ -37,20 +46,47 @@ export default function ControlPanel({
     }
   };
 
+  // Status badge color
+  const getStatusColor = () => {
+    switch (quoteStatus) {
+      case 'live': return 'bg-green-500';
+      case 'fallback': return 'bg-yellow-500';
+      case 'loading': return 'bg-blue-500';
+      case 'error': return 'bg-red-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (quoteStatus) {
+      case 'live': return 'Live';
+      case 'fallback': return 'Offline';
+      case 'loading': return 'Loading...';
+      case 'error': return 'Error';
+      default: return 'Manual';
+    }
+  };
+
   return (
     <div className="bg-gray-900 rounded-lg p-4 mb-4">
-      {/* Symbol search */}
+      {/* Symbol search with status */}
       <div className="mb-4">
         <form onSubmit={handleSymbolSubmit} className="flex gap-2">
           <div className="flex-1">
             <label className="block text-xs text-gray-400 mb-1">Stock Symbol</label>
-            <input
-              type="text"
-              value={symbolInput}
-              onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-              placeholder="AAPL, TSLA, SPY..."
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm uppercase"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={symbolInput}
+                onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+                placeholder="AAPL, TSLA, SPY..."
+                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm uppercase pr-20"
+              />
+              {/* Status badge */}
+              <span className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-xs font-medium text-white ${getStatusColor()}`}>
+                {getStatusText()}
+              </span>
+            </div>
           </div>
           <div className="flex items-end">
             <button
@@ -62,17 +98,54 @@ export default function ControlPanel({
             </button>
           </div>
         </form>
-        {lastUpdated && (
-          <p className="text-xs text-gray-500 mt-1">
-            Last updated: {lastUpdated}
-          </p>
+
+        {/* Quote info display */}
+        {symbol && currentPrice > 0 && (
+          <div className="mt-2 flex items-center gap-3 text-sm">
+            <span className="text-white font-bold">{symbol}</span>
+            {quoteName && <span className="text-gray-400">{quoteName}</span>}
+            <span className="text-white font-mono">${currentPrice.toFixed(2)}</span>
+            {quoteChange !== undefined && quoteChange !== 0 && (
+              <span className={quoteChange >= 0 ? 'text-green-400' : 'text-red-400'}>
+                {quoteChange >= 0 ? '+' : ''}{quoteChange.toFixed(2)} ({quoteChangePercent >= 0 ? '+' : ''}{quoteChangePercent?.toFixed(2)}%)
+              </span>
+            )}
+            {lastUpdated && (
+              <span className="text-gray-500 text-xs">Updated: {lastUpdated}</span>
+            )}
+          </div>
         )}
+      </div>
+
+      {/* Quick stock buttons */}
+      <div className="mb-4">
+        <label className="block text-xs text-gray-400 mb-1">Popular Stocks</label>
+        <div className="flex flex-wrap gap-2">
+          {['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'SPY'].map((sym) => (
+            <button
+              key={sym}
+              onClick={() => {
+                setSymbolInput(sym);
+                onSymbolChange(sym);
+                onLoadQuote(sym);
+              }}
+              disabled={isLoading}
+              className={`px-3 py-1 text-xs rounded transition-colors ${
+                symbol === sym
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              {sym}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Presets dropdown */}
       {presets && presets.length > 0 && (
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-1">Load Example</label>
+          <label className="block text-xs text-gray-400 mb-1">Educational Scenarios</label>
           <select
             onChange={(e) => e.target.value && onLoadPreset(e.target.value)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
@@ -193,7 +266,7 @@ export default function ControlPanel({
         <label className="block text-xs text-gray-400 mb-1">
           Implied Volatility: {impliedVol}%
           <span className="text-gray-500 ml-2">
-            ({impliedVol < 25 ? 'Low' : impliedVol < 50 ? 'Normal' : impliedVol < 75 ? 'High' : 'Very High'})
+            ({impliedVol < 20 ? 'Very Low' : impliedVol < 30 ? 'Low' : impliedVol < 45 ? 'Normal' : impliedVol < 60 ? 'High' : 'Very High'})
           </span>
         </label>
         <input
@@ -206,7 +279,8 @@ export default function ControlPanel({
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
           <span>5%</span>
-          <span>50%</span>
+          <span>30%</span>
+          <span>60%</span>
           <span>100%</span>
           <span>150%</span>
         </div>

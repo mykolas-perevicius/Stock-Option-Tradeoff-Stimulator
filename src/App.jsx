@@ -38,6 +38,12 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'greeks', 'scenarios'
 
+  // Quote status
+  const [quoteStatus, setQuoteStatus] = useState('manual'); // 'live', 'fallback', 'loading', 'error', 'manual'
+  const [quoteName, setQuoteName] = useState('');
+  const [quoteChange, setQuoteChange] = useState(0);
+  const [quoteChangePercent, setQuoteChangePercent] = useState(0);
+
   // Axis controls
   const [minPrice, setMinPrice] = useState(140);
   const [maxPrice, setMaxPrice] = useState(210);
@@ -150,10 +156,15 @@ export default function App() {
   // Load quote from API
   const handleLoadQuote = useCallback(async (sym) => {
     setIsLoading(true);
+    setQuoteStatus('loading');
     try {
       const quote = await fetchQuote(sym);
       setCurrentPrice(Math.round(quote.price * 100) / 100);
       setSymbol(sym);
+      setQuoteName(quote.name || '');
+      setQuoteChange(quote.change || 0);
+      setQuoteChangePercent(quote.changePercent || 0);
+      setQuoteStatus(quote.live ? 'live' : 'fallback');
 
       // Set strike slightly OTM
       const roundedPrice = Math.round(quote.price);
@@ -166,6 +177,7 @@ export default function App() {
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (error) {
       console.error('Failed to load quote:', error);
+      setQuoteStatus('error');
     } finally {
       setIsLoading(false);
     }
@@ -267,6 +279,10 @@ export default function App() {
           investmentAmount={investmentAmount}
           isCall={isCall}
           symbol={symbol}
+          quoteStatus={quoteStatus}
+          quoteName={quoteName}
+          quoteChange={quoteChange}
+          quoteChangePercent={quoteChangePercent}
           onCurrentPriceChange={setCurrentPrice}
           onStrikePriceChange={setStrikePrice}
           onDaysToExpiryChange={setDaysToExpiry}
