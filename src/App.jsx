@@ -130,14 +130,22 @@ export default function App() {
     });
   }, [chartData, currentPrice, strikePrice, premium, investmentAmount, sharesOwned, optionShares, totalPremiumPaid, T, r, sigma, isCall]);
 
-  // Update axis range when parameters change significantly
+  // Update axis range when parameters change - default to focused view
   useEffect(() => {
-    const range = generatePriceRange(currentPrice, T, sigma, 2);
-    setMinPrice(Math.round(range.min * 100) / 100);
-    setMaxPrice(Math.round(range.max * 100) / 100);
-    setMinPL(Math.round(-investmentAmount));
-    setMaxPL(Math.round(investmentAmount * 2));
-  }, [currentPrice, T, sigma, investmentAmount]);
+    // Focus on key prices: current, strike, and breakeven
+    const keyPrices = [currentPrice, strikePrice, breakeven].filter(p => p > 0);
+    const minKey = Math.min(...keyPrices);
+    const maxKey = Math.max(...keyPrices);
+    const priceRange = maxKey - minKey;
+    const padding = Math.max(priceRange * 0.2, currentPrice * 0.03); // 20% padding or min 3%
+
+    setMinPrice(Math.round((minKey - padding) * 100) / 100);
+    setMaxPrice(Math.round((maxKey + padding) * 100) / 100);
+
+    // Tighter P&L range focused on realistic outcomes
+    setMinPL(Math.round(-totalPremiumPaid * 1.2)); // Slightly below max option loss
+    setMaxPL(Math.round(totalPremiumPaid * 1.5)); // Moderate upside
+  }, [currentPrice, strikePrice, breakeven, totalPremiumPaid]);
 
   // Load URL parameters and initialize on mount
   useEffect(() => {
