@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import { formatCurrency, formatPercent, formatPrice } from '../utils/statistics';
 import TradeoffExplanation from './TradeoffExplanation';
 
@@ -17,37 +17,12 @@ export default function RiskRewardPanel({
   isCall,
   impliedVol,
   daysToExpiry,
+  expectedMoveOverride,
+  onExpectedMoveChange,
+  impliedMovePercent,
 }) {
-  // Expected move slider state (null = use IV-implied)
-  const [expectedMoveOverride, setExpectedMoveOverride] = useState(null);
-
-  // Calculate IV-implied move
-  const T = Math.max(0.001, daysToExpiry / 365);
-  const sigma = impliedVol / 100;
-  const impliedMovePercent = sigma * Math.sqrt(T) * 100;
-
   // Use override if set, otherwise use implied
   const expectedMove = expectedMoveOverride !== null ? expectedMoveOverride : impliedMovePercent;
-
-  // Recalculate EV with expected move (simplified - for display purposes)
-  const adjustedStats = useMemo(() => {
-    if (expectedMoveOverride === null) return stats;
-
-    // Adjust probabilities based on expected move vs implied move
-    const moveRatio = expectedMoveOverride / impliedMovePercent;
-
-    // If user expects larger move, increase option win probability slightly
-    // This is a simplified adjustment for illustration
-    const adjustmentFactor = Math.min(1.5, Math.max(0.5, moveRatio));
-
-    return {
-      ...stats,
-      // Show that options become more attractive with higher expected move
-      optionEVAdjusted: stats.optionEV * adjustmentFactor,
-      stockEVAdjusted: stats.stockEV,
-      isAdjusted: true,
-    };
-  }, [stats, expectedMoveOverride, impliedMovePercent]);
 
   const StatBar = ({ label, value, maxValue, color, subtext }) => {
     const width = Math.min(100, Math.max(0, (Math.abs(value) / maxValue) * 100));
@@ -78,7 +53,7 @@ export default function RiskRewardPanel({
           </h3>
           {expectedMoveOverride !== null && (
             <button
-              onClick={() => setExpectedMoveOverride(null)}
+              onClick={() => onExpectedMoveChange(null)}
               className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300"
             >
               Reset to IV
@@ -96,7 +71,7 @@ export default function RiskRewardPanel({
             max={impliedMovePercent * 3}
             step={0.5}
             value={expectedMove}
-            onChange={(e) => setExpectedMoveOverride(parseFloat(e.target.value))}
+            onChange={(e) => onExpectedMoveChange(parseFloat(e.target.value))}
             className="flex-1 h-2 bg-gray-700 rounded-lg cursor-pointer accent-purple-500"
           />
           <div className="w-24 text-center">

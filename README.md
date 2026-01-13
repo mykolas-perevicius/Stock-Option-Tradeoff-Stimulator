@@ -10,13 +10,37 @@ A full-featured, academic-grade simulator for comparing stock ownership versus o
 
 ## Features
 
+### Data & Pricing
 - Real-time options data via Tradier API (with offline/manual fallback)
 - Black-Scholes pricing with full Greeks (delta, gamma, theta, vega, rho)
+- Preset scenarios for common market conditions
+
+### Visualization
 - Interactive P&L visualization with adjustable axis controls
-- Probability distribution overlays (log-normal)
+- **Independent probability distribution** - shows full ±3σ range regardless of P&L zoom level
+- Time decay animation with day slider
+- Multi-strike comparison charts
+
+### Analysis
 - Risk/reward analysis with expected value calculations
-- Time decay visualization
+- **Expected Move Slider** - adjust your volatility assumption and see all calculations update in real-time
+- VaR (Value at Risk) at 95% and 99% confidence levels
+- Probability of profit calculations for both stock and options
+
+### Expected Move Feature
+The expected move slider lets you override the market's implied volatility with your own expectation:
+- If you expect larger moves than IV implies, slide right to see how that affects option values
+- If you expect smaller moves, slide left
+- All charts, statistics, and probabilities update instantly:
+  - P&L charts
+  - Probability distribution
+  - Greeks panel
+  - Time decay visualization
+  - Multi-strike comparison
+
+### Export
 - Export to PNG, CSV, PDF
+- Shareable URL with encoded parameters
 - Dark mode UI optimized for trading
 
 ## Quick Start
@@ -65,6 +89,22 @@ The simulator works fully offline with manual parameter input.
 
 - [REQUIREMENTS.md](./REQUIREMENTS.md) - Full specification document
 - [CLAUDE.md](./CLAUDE.md) - Development guidance
+
+## Architecture Highlights
+
+### State Management
+The app uses React hooks (useState, useMemo) with state lifted to App.jsx:
+- **Expected move override** propagates to all components via adjusted sigma
+- **Probability distribution** has its own independent data generation (±3σ range)
+- **P&L chart range** is separate from probability visualization
+
+### Key Data Flows
+```
+User adjusts expected move slider
+    → Converts to equivalent sigma
+    → All components receive adjusted sigma
+    → Charts, stats, and probabilities recalculate
+```
 
 ## License
 

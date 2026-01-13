@@ -14,6 +14,8 @@ import { priceAtSigma } from '../utils/probability';
 
 /**
  * Probability distribution chart showing where the stock is likely to end up
+ * This chart has its own independent price range based on volatility (±3σ)
+ * and is NOT affected by the P&L chart range
  */
 export default function ProbabilityChart({
   data,
@@ -26,20 +28,21 @@ export default function ProbabilityChart({
   minPrice,
   maxPrice,
   showConfidenceIntervals = true,
+  expectedMoveOverride = null,
+  impliedMovePercent = null,
 }) {
-  // Calculate sigma levels
+  // Calculate sigma levels based on current (possibly adjusted) sigma
   const sigma1Up = priceAtSigma(currentPrice, T, r, sigma, 1);
   const sigma1Down = priceAtSigma(currentPrice, T, r, sigma, -1);
   const sigma2Up = priceAtSigma(currentPrice, T, r, sigma, 2);
   const sigma2Down = priceAtSigma(currentPrice, T, r, sigma, -2);
 
-  // Filter data to visible range
-  const visibleData = data.filter(
-    (d) => d.price >= minPrice && d.price <= maxPrice
-  );
+  // Calculate expected move percentage from current sigma
+  const currentExpectedMove = sigma * Math.sqrt(T) * 100;
 
+  // Data is already filtered to the probability-specific range (passed from parent)
   // Create data with profit zones highlighted
-  const enhancedData = visibleData.map((d) => ({
+  const enhancedData = data.map((d) => ({
     ...d,
     stockProfit: d.price > currentPrice ? d.probability : 0,
     stockLoss: d.price <= currentPrice ? d.probability : 0,
@@ -51,9 +54,18 @@ export default function ProbabilityChart({
     return [`${value.toFixed(2)}%`, name];
   };
 
+  const isUsingCustomMove = expectedMoveOverride !== null;
+
   return (
     <div className="bg-gray-900 rounded-lg p-4">
-      <h2 className="text-lg font-semibold mb-3">Price Probability Distribution</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold">Price Probability Distribution</h2>
+        {isUsingCustomMove && (
+          <span className="text-xs px-2 py-1 bg-purple-900/50 text-purple-300 rounded">
+            Custom: {currentExpectedMove.toFixed(1)}% move (IV: {impliedMovePercent?.toFixed(1)}%)
+          </span>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={180}>
         <AreaChart
           data={enhancedData}
@@ -142,7 +154,10 @@ export default function ProbabilityChart({
         )}
       </div>
       <p className="text-xs text-gray-500 text-center mt-1">
-        Shows where the stock is likely to end up based on implied volatility
+        {isUsingCustomMove
+          ? `Distribution based on your expected ${currentExpectedMove.toFixed(1)}% move (market implies ${impliedMovePercent?.toFixed(1)}%)`
+          : `Distribution based on ${(sigma * 100).toFixed(0)}% implied volatility`
+        }
       </p>
     </div>
   );

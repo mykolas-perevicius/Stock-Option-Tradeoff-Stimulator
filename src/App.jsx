@@ -42,6 +42,9 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'greeks', 'scenarios'
 
+  // Expected move override (null = use IV-implied volatility)
+  const [expectedMoveOverride, setExpectedMoveOverride] = useState(null);
+
   // Quote status
   const [quoteStatus, setQuoteStatus] = useState('manual'); // 'live', 'fallback', 'loading', 'error', 'manual'
   const [quoteName, setQuoteName] = useState('');
@@ -59,8 +62,17 @@ export default function App() {
 
   // Derived values
   const T = Math.max(0.001, daysToExpiry / 365);
-  const sigma = Math.max(0.01, impliedVol / 100);
+  const baseImpliedVol = Math.max(0.01, impliedVol / 100);
   const r = riskFreeRate / 100;
+
+  // Calculate IV-implied expected move (for display and as baseline)
+  const impliedMovePercent = baseImpliedVol * Math.sqrt(T) * 100;
+
+  // If user overrides expected move, calculate equivalent sigma
+  // expectedMove% = sigma * sqrt(T) * 100, so sigma = expectedMove% / (sqrt(T) * 100)
+  const sigma = expectedMoveOverride !== null
+    ? Math.max(0.01, expectedMoveOverride / (Math.sqrt(T) * 100))
+    : baseImpliedVol;
 
   // Calculate option price using Black-Scholes
   const premium = useMemo(() => {
@@ -130,6 +142,34 @@ export default function App() {
       isCall,
     });
   }, [chartData, currentPrice, strikePrice, premium, investmentAmount, sharesOwned, optionShares, totalPremiumPaid, T, r, sigma, isCall]);
+
+  // Generate SEPARATE probability distribution data (independent of P&L chart range)
+  // This uses its own range based on ±3 sigma to show the full distribution
+  const probabilityData = useMemo(() => {
+    const steps = 150;
+    // Calculate sigma-based range (±3 standard deviations covers 99.7% of distribution)
+    const sigmaMove = currentPrice * sigma * Math.sqrt(T);
+    const probMinPrice = Math.max(currentPrice * 0.5, currentPrice - 3 * sigmaMove);
+    const probMaxPrice = currentPrice + 3 * sigmaMove;
+    const priceStep = (probMaxPrice - probMinPrice) / steps;
+    const points = [];
+
+    for (let i = 0; i <= steps; i++) {
+      const price = probMinPrice + i * priceStep;
+      const prob = stockProbability(price, currentPrice, T, r, sigma) * priceStep;
+
+      points.push({
+        price: Math.round(price * 100) / 100,
+        probability: Math.round(prob * 10000) / 100,
+      });
+    }
+
+    return {
+      data: points,
+      minPrice: probMinPrice,
+      maxPrice: probMaxPrice,
+    };
+  }, [currentPrice, T, r, sigma]);
 
   // Update axis range when parameters change - default to focused view
   useEffect(() => {
@@ -388,15 +428,17 @@ export default function App() {
           />
 
           <ProbabilityChart
-            data={chartData}
+            data={probabilityData.data}
             currentPrice={currentPrice}
             breakeven={breakeven}
             strikePrice={strikePrice}
             T={T}
             r={r}
             sigma={sigma}
-            minPrice={minPrice}
-            maxPrice={maxPrice}
+            minPrice={probabilityData.minPrice}
+            maxPrice={probabilityData.maxPrice}
+            expectedMoveOverride={expectedMoveOverride}
+            impliedMovePercent={impliedMovePercent}
           />
         </div>
 
@@ -438,6 +480,9 @@ export default function App() {
               isCall={isCall}
               impliedVol={impliedVol}
               daysToExpiry={daysToExpiry}
+              expectedMoveOverride={expectedMoveOverride}
+              onExpectedMoveChange={setExpectedMoveOverride}
+              impliedMovePercent={impliedMovePercent}
             />
             <AIInterpretation
               symbol={symbol}
@@ -459,11 +504,13 @@ export default function App() {
             currentPrice={currentPrice}
             daysToExpiry={daysToExpiry}
             impliedVol={impliedVol}
+            sigma={sigma}
             riskFreeRate={riskFreeRate}
             investmentAmount={investmentAmount}
             isCall={isCall}
             minPrice={minPrice}
             maxPrice={maxPrice}
+            expectedMoveOverride={expectedMoveOverride}
           />
         )}
 

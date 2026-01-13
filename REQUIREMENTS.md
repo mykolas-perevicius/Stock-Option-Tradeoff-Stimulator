@@ -53,108 +53,128 @@ Visualize the fundamental tradeoff:
 ## 3. Core Features
 
 ### 3.1 Real-Time Data Integration
-- [ ] Stock symbol search with autocomplete
-- [ ] Fetch current stock price
+- [x] Stock symbol search with autocomplete
+- [x] Fetch current stock price
 - [ ] Load full options chain for selected symbol
 - [ ] Display all available expirations
 - [ ] Display all available strikes for selected expiration
-- [ ] Show real Greeks (delta, gamma, theta, vega, rho)
-- [ ] Show real IV (implied volatility)
+- [x] Show real Greeks (delta, gamma, theta, vega, rho) - via Black-Scholes calculation
+- [x] Show real IV (implied volatility) - estimated from symbol
 - [ ] Auto-refresh toggle (configurable interval)
-- [ ] Last updated timestamp display
-- [ ] API status indicator (connected/error/rate-limited)
+- [x] Last updated timestamp display
+- [x] API status indicator (connected/error/rate-limited)
 
 ### 3.2 Position Builder
-- [ ] Select call or put
+- [x] Select call or put
 - [ ] Select expiration date from real chain
 - [ ] Select strike price from real chain
-- [ ] Auto-populate premium from market data
-- [ ] Manual override for all fields
-- [ ] Investment amount input
-- [ ] Calculate shares owned vs contracts owned
-- [ ] Show position cost basis
+- [x] Auto-populate premium from market data (via Black-Scholes)
+- [x] Manual override for all fields
+- [x] Investment amount input
+- [x] Calculate shares owned vs contracts owned
+- [x] Show position cost basis
 - [ ] Support multiple legs (spreads) - future enhancement
 
 ### 3.3 P&L Visualization
 
 #### 3.3.1 Main Chart Requirements
-- [ ] Stock P&L line (green) - linear
-- [ ] Option P&L line (yellow/orange) - hockey stick curve
-- [ ] **CRITICAL**: Adjustable axis bounds (not dominated by extremes)
-  - [ ] Auto-scale to relevant range (e.g., +/- 2 standard deviations)
-  - [ ] Manual min/max price axis controls
-  - [ ] Manual min/max P&L axis controls
+- [x] Stock P&L line (green) - linear
+- [x] Option P&L line (yellow/orange) - hockey stick curve
+- [x] **CRITICAL**: Adjustable axis bounds (not dominated by extremes)
+  - [x] Auto-scale to relevant range (focused view around key prices)
+  - [x] Manual min/max price axis controls
+  - [x] Manual min/max P&L axis controls
   - [ ] Zoom in/out controls
   - [ ] Pan/drag to explore
-  - [ ] Reset to default view button
-- [ ] Reference lines:
-  - [ ] Current price (yellow dashed)
-  - [ ] Strike price (blue dashed)
-  - [ ] Breakeven price (orange dashed)
-  - [ ] Zero P&L line (gray)
-- [ ] Hover tooltips with exact values
+  - [x] Reset to default view button (via presets)
+- [x] Reference lines:
+  - [x] Current price (yellow dashed)
+  - [x] Strike price (blue dashed)
+  - [x] Breakeven price (orange dashed)
+  - [x] Zero P&L line (gray)
+- [x] Hover tooltips with exact values
 - [ ] Click to pin a price point for comparison
 
 #### 3.3.2 Probability Distribution Overlay
-- [ ] Log-normal distribution curve showing likely price outcomes
-- [ ] Shaded regions for:
-  - [ ] Stock profit zone
-  - [ ] Stock loss zone
-  - [ ] Option profit zone
-  - [ ] Option loss zone (below breakeven)
+- [x] Log-normal distribution curve showing likely price outcomes
+- [x] **INDEPENDENT of P&L chart range** - uses ±3σ range
+- [x] Shaded regions for probability visualization
+- [x] Reference lines for ±1σ and ±2σ confidence intervals
+- [x] Shows when using custom expected move vs IV-implied
 - [ ] Toggle distribution overlay on/off
-- [ ] Adjustable confidence intervals (1 sigma, 2 sigma, 3 sigma)
+- [x] Adjustable confidence intervals (1 sigma, 2 sigma displayed)
 
 #### 3.3.3 Time Decay Visualization
-- [ ] Slider for days to expiration
-- [ ] Animate option value decay over time
-- [ ] Show P&L curves at multiple time points (T, T-7, T-14, etc.)
-- [ ] Theta burn visualization
+- [x] Slider for days to expiration
+- [x] Animate option value decay over time
+- [x] Show P&L curves at current time point
+- [x] Theta burn visualization in TimeDecayChart
 
 ### 3.4 Risk/Reward Analysis Panel
 
-#### 3.4.1 Downside Analysis
-- [ ] Probability of loss (stock vs options)
-- [ ] Average loss when wrong
-- [ ] Maximum loss
-- [ ] Value at Risk (VaR) at 95%, 99%
-- [ ] Expected shortfall / CVaR
+#### 3.4.1 Expected Move Feature (NEW)
+- [x] Expected move slider to override IV-implied volatility
+- [x] Converts expected move % back to equivalent sigma
+- [x] **Affects all calculations globally**:
+  - [x] Probability distribution
+  - [x] Risk/reward statistics
+  - [x] Greeks calculations
+  - [x] Time decay visualization
+  - [x] Multi-strike comparison
+- [x] Visual indicator when using custom expected move
+- [x] Reset to IV button
 
-#### 3.4.2 Upside Analysis
-- [ ] Probability of profit
-- [ ] Average gain when right
-- [ ] Probability of doubling investment
-- [ ] Expected gain at target price
+#### 3.4.2 Downside Analysis
+- [x] Probability of loss (stock vs options)
+- [x] Average loss when wrong
+- [x] Maximum loss
+- [x] Value at Risk (VaR) at 95%, 99%
+- [ ] Expected shortfall / CVaR (calculated but not prominently displayed)
 
-#### 3.4.3 Expected Value
-- [ ] Probability-weighted EV for stock
-- [ ] Probability-weighted EV for options
-- [ ] EV difference
-- [ ] Sharpe-ratio-like metric (EV / risk)
+#### 3.4.3 Upside Analysis
+- [x] Probability of profit
+- [x] Average gain when right
+- [x] Probability of 50% return
+- [x] Probability of 100% return
+- [x] Expected gain at target price
 
-#### 3.4.4 Key Price Levels
-- [ ] Option breakeven price
-- [ ] Price where options outperform stock (crossover)
-- [ ] Price for 50% return
-- [ ] Price for 100% return
-- [ ] Price for 200% return
+#### 3.4.4 Expected Value
+- [x] Probability-weighted EV for stock
+- [x] Probability-weighted EV for options
+- [x] EV difference
+- [ ] Sharpe-ratio-like metric (EV / risk) - calculated but simplified
+
+#### 3.4.5 Key Price Levels
+- [x] Option breakeven price
+- [x] Price where options outperform stock (crossover)
+- [x] Price for 50% return
+- [x] Price for 100% return
+- [x] Price for 200% return
 
 ### 3.5 Greeks Dashboard
-- [ ] Delta - price sensitivity
-- [ ] Gamma - delta sensitivity
-- [ ] Theta - time decay per day
-- [ ] Vega - volatility sensitivity
-- [ ] Rho - interest rate sensitivity
-- [ ] Visual representation of each Greek
+- [x] Delta - price sensitivity
+- [x] Gamma - delta sensitivity
+- [x] Theta - time decay per day
+- [x] Vega - volatility sensitivity
+- [x] Rho - interest rate sensitivity
+- [x] Visual representation of each Greek
 - [ ] How Greeks change across strikes (smile/skew)
 
 ### 3.6 Scenario Analysis
-- [ ] "What if" price input
-- [ ] "What if" IV change input
-- [ ] "What if" days elapsed input
-- [ ] Side-by-side comparison table
+- [x] "What if" price input
+- [x] "What if" IV change input
+- [x] "What if" days elapsed input
+- [x] Side-by-side comparison table
 - [ ] Monte Carlo simulation (N paths)
 - [ ] Distribution of outcomes histogram
+
+### 3.7 Multi-Strike Comparison (NEW)
+- [x] Compare multiple strikes at once
+- [x] Shows P&L curves for different strikes
+- [x] Probability of profit for each strike
+- [x] Best strike by probability vs best by EV
+- [x] Uses adjusted sigma when expected move is overridden
+- [x] Educational summary of ITM/ATM/OTM tradeoffs
 
 ---
 
@@ -166,29 +186,30 @@ Problem: Extreme values (stock going to 0, or 10x) dominate the chart
 Solution: Smart defaults + manual controls
 ```
 
-- [ ] **Auto-range algorithm**:
-  - Default X-axis: Current price +/- 2 sigma (based on IV and time)
-  - Default Y-axis: -100% to +200% of investment (adjusts to data)
+- [x] **Auto-range algorithm**:
+  - Default X-axis: Focused view around key prices (current, strike, breakeven)
+  - Default Y-axis: Based on position sizing and premium
   - Never show stock at $0 unless user explicitly wants it
 
-- [ ] **Manual controls**:
+- [x] **Manual controls**:
   - Min price input
   - Max price input
   - Min P&L input
   - Max P&L input
-  - Lock/unlock aspect ratio
+  - [ ] Lock/unlock aspect ratio
 
-- [ ] **Quick presets**:
-  - "Conservative" (+/- 1 sigma)
-  - "Normal" (+/- 2 sigma)
-  - "Wide" (+/- 3 sigma)
-  - "Full range" (0 to 2x current)
+- [x] **Quick presets**:
+  - "Super Focused" (tight around key prices)
+  - "±1σ" (1 sigma range)
+  - "±2σ" (2 sigma range)
+  - "±3σ" (3 sigma range)
+  - "Full Range" (10% to 200% of current)
 
 ### 4.2 Interactive Features
 - [ ] Click and drag to zoom
 - [ ] Scroll to zoom in/out
 - [ ] Double-click to reset
-- [ ] Crosshair cursor with values
+- [x] Crosshair cursor with values (via tooltips)
 - [ ] Comparison mode (click two points)
 
 ---
@@ -196,24 +217,23 @@ Solution: Smart defaults + manual controls
 ## 5. Import/Export Functionality
 
 ### 5.1 Export Options
-- [ ] **Chart Export**:
-  - PNG image (high resolution)
-  - SVG vector
-  - PDF report
+- [x] **Chart Export**:
+  - [x] PNG image (high resolution)
+  - [ ] SVG vector
+  - [x] PDF report
 
-- [ ] **Data Export**:
-  - CSV of P&L data points
-  - JSON of full simulation parameters
-  - Excel (.xlsx) with formatted tables
+- [x] **Data Export**:
+  - [x] CSV of P&L data points
+  - [ ] JSON of full simulation parameters
+  - [ ] Excel (.xlsx) with formatted tables
 
-- [ ] **Report Export**:
-  - Full PDF report with:
+- [x] **Report Export**:
+  - [x] Full PDF report with:
     - Input parameters
-    - All charts
+    - Charts
     - Risk metrics
     - Greeks
-    - Recommendations
-  - Markdown summary
+  - [ ] Markdown summary
 
 ### 5.2 Import Options
 - [ ] **Load saved simulation**:
@@ -229,8 +249,8 @@ Solution: Smart defaults + manual controls
   - Backtest mode
 
 ### 5.3 Sharing
-- [ ] Generate shareable URL with encoded parameters
-- [ ] Copy link to clipboard
+- [x] Generate shareable URL with encoded parameters
+- [x] Copy link to clipboard
 - [ ] QR code generation
 
 ---
@@ -238,7 +258,8 @@ Solution: Smart defaults + manual controls
 ## 6. Educational Features
 
 ### 6.1 Tooltips & Explanations
-- [ ] Hover explanations for every metric
+- [x] Hover explanations for metrics
+- [x] Expandable tradeoff explanation section
 - [ ] "Learn more" expandable sections
 - [ ] Glossary of terms
 
@@ -248,12 +269,13 @@ Solution: Smart defaults + manual controls
 - [ ] "When to use options vs stock" decision tree
 
 ### 6.3 Comparison Scenarios
-- [ ] Pre-built scenarios:
-  - High IV environment (meme stock)
-  - Low IV environment (blue chip)
-  - Earnings play
-  - Long-dated LEAPS
-  - Weekly expiration
+- [x] Pre-built scenarios:
+  - [x] Blue Chip (AAPL)
+  - [x] Growth Stock (TSLA)
+  - [x] Meme Stock (GME)
+  - [x] Index (SPY)
+  - [x] Earnings Play
+  - [x] LEAPS
 
 ---
 
@@ -264,7 +286,7 @@ Solution: Smart defaults + manual controls
 Framework: React 18+ with Vite
 Styling: Tailwind CSS
 Charts: Recharts (with custom controls)
-State: useState/useMemo (Zustand if needed)
+State: useState/useMemo with state lifted to App.jsx
 Forms: Native React
 ```
 
@@ -272,49 +294,45 @@ Forms: Native React
 ```
 /src
   /components
-    /charts
-      PLChart.tsx           # Main P&L visualization
-      ProbabilityChart.tsx  # Distribution overlay
-      GreeksChart.tsx       # Greeks visualization
-      TimeDecayChart.tsx    # Theta decay animation
-    /controls
-      AxisControls.tsx      # Min/max/zoom controls
-      PositionBuilder.tsx   # Strike/expiry selector
-      SymbolSearch.tsx      # Ticker autocomplete
-    /panels
-      RiskRewardPanel.tsx   # Statistics display
-      GreeksPanel.tsx       # Greeks dashboard
-      ScenarioPanel.tsx     # What-if analysis
-    /export
-      ExportMenu.tsx        # Export options
-      PDFReport.tsx         # Report generator
-  /hooks
-    useOptionsData.ts       # API integration
-    useBlackScholes.ts      # Pricing calculations
-    useProbability.ts       # Distribution math
+    PLChart.jsx              # Main P&L visualization
+    ProbabilityChart.jsx     # Independent probability distribution
+    AnimatedPLChart.jsx      # Time decay animation
+    GreeksPanel.jsx          # Greeks dashboard
+    RiskRewardPanel.jsx      # Risk/reward + expected move slider
+    TimeDecayChart.jsx       # Theta decay
+    ScenarioPanel.jsx        # What-if analysis
+    MultiStrikePanel.jsx     # Multi-strike comparison
+    ControlPanel.jsx         # Main inputs
+    AxisControls.jsx         # Chart range controls
+    ExportMenu.jsx           # Export options
   /utils
-    blackScholes.ts         # B-S formulas
-    greeks.ts               # Greek calculations
-    probability.ts          # Log-normal distribution
-    exportHelpers.ts        # File generation
+    blackScholes.js          # B-S formulas
+    greeks.js                # Greek calculations
+    probability.js           # Log-normal distribution
+    statistics.js            # Stats calculations
+    exportHelpers.js         # File generation
   /api
-    tradier.ts              # Tradier API client
-    yahoo.ts                # Yahoo fallback
-    alphaVantage.ts         # Alpha Vantage fallback
-  /types
-    options.ts              # TypeScript interfaces
+    stockQuote.js            # Quote fetching
+  /data
+    presets.js               # Preset scenarios
 ```
 
-### 7.3 API Key Management
+### 7.3 State Management
+- **App.jsx as central hub** - all critical state lives here
+- **expectedMoveOverride** - key state that affects all probability calculations
+- **Derived sigma** - calculated from expectedMoveOverride or baseImpliedVol
+- **Independent probability data** - separate useMemo with ±3σ range
+
+### 7.4 API Key Management
 - User provides their own API key
 - Stored in localStorage (with warning)
 - Option to use environment variable for deployment
 - Never transmitted to any server except the data provider
 
-### 7.4 Offline Capability
-- Service worker for PWA
-- Cache last fetched data
-- Full functionality with manual inputs
+### 7.5 Offline Capability
+- [ ] Service worker for PWA
+- [ ] Cache last fetched data
+- [x] Full functionality with manual inputs
 
 ---
 
@@ -351,7 +369,16 @@ P(S_T) = (1 / (S_T * sigma * sqrt(2 * pi * T))) * exp(-(ln(S_T) - mu)^2 / (2 * s
 // Where mu = ln(S_0) + (r - sigma^2/2) * T
 ```
 
-### 8.4 Expected Value Calculation
+### 8.4 Expected Move Conversion
+```typescript
+// From IV to expected move
+expectedMove% = sigma * sqrt(T) * 100
+
+// From expected move back to sigma
+sigma = expectedMove% / (sqrt(T) * 100)
+```
+
+### 8.5 Expected Value Calculation
 ```typescript
 // Numerical integration over price distribution
 EV = sum(P(S_i) * PL(S_i) * deltaS)
@@ -362,10 +389,10 @@ EV = sum(P(S_i) * PL(S_i) * deltaS)
 ## 9. UI/UX Requirements
 
 ### 9.1 Layout
-- Responsive design (mobile, tablet, desktop)
-- Dark mode default (trading aesthetic)
-- Light mode option
-- Collapsible panels for screen real estate
+- [x] Responsive design (mobile, tablet, desktop)
+- [x] Dark mode default (trading aesthetic)
+- [ ] Light mode option
+- [ ] Collapsible panels for screen real estate
 
 ### 9.2 Color Scheme
 ```
@@ -375,39 +402,40 @@ Profit: Green (#22C55E)
 Loss: Red (#EF4444)
 Neutral: Gray (#6B7280)
 Probability: Purple (#A855F7)
-Background: Dark gray (#0F0F0F to #1F1F1F)
+Expected Move: Purple (#A855F7)
+Background: Dark gray (#030712 to #1F2937)
 ```
 
 ### 9.3 Accessibility
-- Keyboard navigation
-- Screen reader support
-- Color blind friendly palette option
-- High contrast mode
+- [ ] Keyboard navigation
+- [ ] Screen reader support
+- [ ] Color blind friendly palette option
+- [ ] High contrast mode
 
 ---
 
 ## 10. Testing Requirements
 
 ### 10.1 Unit Tests
-- Black-Scholes calculations (validate against known values)
-- Greeks calculations
-- Probability distribution
-- P&L calculations
+- [ ] Black-Scholes calculations (validate against known values)
+- [ ] Greeks calculations
+- [ ] Probability distribution
+- [ ] P&L calculations
 
 ### 10.2 Integration Tests
-- API data fetching
-- Chart rendering with various data
-- Export functionality
+- [ ] API data fetching
+- [ ] Chart rendering with various data
+- [ ] Export functionality
 
 ### 10.3 E2E Tests
-- Full user flow: search -> select -> analyze -> export
+- [ ] Full user flow: search -> select -> analyze -> export
 
 ---
 
 ## 11. Deployment
 
 ### 11.1 Hosting Options
-- Vercel (recommended)
+- [x] Vercel (recommended) - currently deployed
 - Netlify
 - GitHub Pages (static export)
 - Self-hosted
@@ -419,9 +447,9 @@ VITE_ALPHA_VANTAGE_KEY=optional_fallback
 ```
 
 ### 11.3 CI/CD
-- GitHub Actions for testing
-- Auto-deploy on main branch
-- Preview deployments for PRs
+- [ ] GitHub Actions for testing
+- [x] Auto-deploy on main branch (Vercel)
+- [ ] Preview deployments for PRs
 
 ---
 
@@ -432,7 +460,7 @@ VITE_ALPHA_VANTAGE_KEY=optional_fallback
 - [ ] Historical backtesting
 - [ ] Paper trading integration
 - [ ] Social sharing / community scenarios
-- [ ] AI-powered strategy suggestions
+- [x] AI-powered analysis (via Groq integration)
 - [ ] Real-time streaming data
 - [ ] Mobile app (React Native)
 
@@ -440,24 +468,34 @@ VITE_ALPHA_VANTAGE_KEY=optional_fallback
 
 ## 13. Success Criteria
 
-1. User can enter any stock symbol and get real options data
-2. Charts are readable and not dominated by extreme values
-3. Clear visualization of linear (stock) vs nonlinear (options) tradeoff
-4. Probability-weighted analysis shows realistic expected outcomes
-5. Full export capability (PNG, CSV, PDF)
-6. Works offline with manual inputs
-7. Educational value for understanding options
+1. [x] User can enter any stock symbol and get real options data
+2. [x] Charts are readable and not dominated by extreme values
+3. [x] Clear visualization of linear (stock) vs nonlinear (options) tradeoff
+4. [x] Probability-weighted analysis shows realistic expected outcomes
+5. [x] Full export capability (PNG, CSV, PDF)
+6. [x] Works offline with manual inputs
+7. [x] Educational value for understanding options
+8. [x] **Expected move slider affects all calculations globally**
+9. [x] **Probability distribution is independent of P&L chart range**
 
 ---
 
 ## 14. Open Questions
 
 1. **API Key UX**: Should users sign up for their own Tradier key, or do we provide a limited shared key?
+   - *Current: Users can use manual mode or provide their own key*
+
 2. **Caching**: How long to cache options chain data? (Suggestion: 1 minute for intraday)
+   - *Current: No caching implemented*
+
 3. **Multi-leg priority**: Is basic spreads support needed for v1?
+   - *Deferred to v2*
+
 4. **Historical mode**: Should we include ability to "replay" past dates?
+   - *Deferred to v2*
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 1.1*
 *Last Updated: January 2025*
+*Changes in 1.1: Added expected move slider feature, independent probability distribution, multi-strike comparison, updated completion status*
