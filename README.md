@@ -110,8 +110,8 @@ The yfinance provider requires a Python backend. Deploy it to **Render.com** (fr
 2. Click "New +" → "Blueprint"
 3. Connect your GitHub repo
 4. Render will auto-detect `render.yaml` and deploy the backend
-5. Copy the deployed URL (e.g., `https://stock-options-backend.onrender.com`)
-6. Update `VITE_YFINANCE_BACKEND_URL` in your Vercel environment variables
+5. The production backend is at: `https://stock-options-backend-62j0.onrender.com`
+6. Update `VITE_YFINANCE_BACKEND_URL` in your Vercel environment variables (already configured for stocksandoptions.org)
 
 **Or deploy manually:**
 ```bash

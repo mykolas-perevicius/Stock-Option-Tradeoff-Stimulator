@@ -32,7 +32,7 @@ Create a `.env` file in the project root:
 ```bash
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_YFINANCE_BACKEND_URL=http://localhost:8000  # Optional
+VITE_YFINANCE_BACKEND_URL=https://stock-options-backend-62j0.onrender.com  # Production backend
 ```
 
 ## Project Structure
@@ -105,7 +105,9 @@ VITE_YFINANCE_BACKEND_URL=http://localhost:8000  # Optional
   - Free: Yahoo Finance, yfinance (via backend)
   - Key required: Finnhub, Twelve Data, Alpha Vantage, FMP
 - **Backend**: FastAPI Python server for yfinance (optional)
-- **Deployment**: Vercel (frontend), Railway/Render (backend optional)
+- **Deployment**: Vercel (frontend), Render.com (backend)
+  - Frontend: https://stocksandoptions.org
+  - Backend: https://stock-options-backend-62j0.onrender.com
 
 ## API Provider System
 
