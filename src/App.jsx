@@ -28,7 +28,7 @@ import { useAuth } from './contexts/AuthContext';
 
 // Data
 import { presets, getPresetById } from './data/presets';
-import { fetchQuote, getEstimatedIV, getStoredProvider, getStoredApiKeys } from './api/stockQuote';
+import { fetchQuote, fetchIV, getEstimatedIV, getStoredProvider, getStoredApiKeys } from './api/stockQuote';
 import { loadGroqApiKey } from './api/groqApi';
 
 export default function App() {
@@ -240,9 +240,10 @@ export default function App() {
       const roundedPrice = Math.round(quote.price);
       setStrikePrice(isCall ? roundedPrice + 5 : roundedPrice - 5);
 
-      // Estimate IV
-      const estimatedIV = getEstimatedIV(sym);
-      setImpliedVol(estimatedIV);
+      // Fetch live IV from backend (falls back to estimate if unavailable)
+      const ivData = await fetchIV(sym);
+      setImpliedVol(ivData.iv);
+      console.log(`IV for ${sym}: ${ivData.iv}% (source: ${ivData.source})`);
 
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (error) {

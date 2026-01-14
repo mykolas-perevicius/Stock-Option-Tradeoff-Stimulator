@@ -103,6 +103,46 @@ export function getEstimatedIV(symbol) {
 }
 
 /**
+ * Fetch implied volatility from the backend
+ * Falls back to estimated IV if backend is unavailable
+ *
+ * @param {string} symbol - Stock ticker symbol
+ * @returns {Promise<object>} IV data: { iv, source, atmStrike?, expirationDate? }
+ */
+export async function fetchIV(symbol) {
+  const BACKEND_URL = import.meta.env.VITE_YFINANCE_BACKEND_URL || 'http://localhost:8000';
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/iv/${symbol.toUpperCase()}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(15000), // 15 second timeout
+    });
+
+    if (!response.ok) {
+      throw new Error(`IV fetch failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      iv: data.iv,
+      source: data.source,
+      atmStrike: data.atmStrike,
+      expirationDate: data.expirationDate,
+      live: data.source === 'options_chain',
+    };
+  } catch (error) {
+    console.warn(`Failed to fetch IV for ${symbol}:`, error.message);
+    // Return estimated IV as fallback
+    return {
+      iv: getEstimatedIV(symbol),
+      source: 'estimated',
+      live: false,
+    };
+  }
+}
+
+/**
  * Check if quote is live or fallback
  * @param {object} quote - Quote object
  * @returns {boolean}

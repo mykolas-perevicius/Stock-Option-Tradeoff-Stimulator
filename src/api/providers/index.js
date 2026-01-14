@@ -20,23 +20,23 @@ export const providers = {
   fmp: fmpProvider,
 };
 
-// Provider list for UI dropdown (ordered: free first, then paid)
+// Provider list for UI dropdown (ordered: recommended first, then paid)
 export const providerList = [
   {
-    id: 'yahoo',
-    name: 'Yahoo Finance',
+    id: 'yfinance',
+    name: 'yfinance (Recommended)',
     requiresApiKey: false,
-    rateLimit: 'Unlimited*',
-    description: 'Free, no API key required',
+    rateLimit: 'Unlimited',
+    description: 'Live data via backend server with options IV',
     badge: 'Free',
   },
   {
-    id: 'yfinance',
-    name: 'yfinance (Backend)',
+    id: 'yahoo',
+    name: 'Yahoo Finance (Offline)',
     requiresApiKey: false,
-    rateLimit: 'Unlimited',
-    description: 'Python yfinance via our backend server',
-    badge: 'Free',
+    rateLimit: 'N/A',
+    description: 'CORS blocked - uses cached/estimated data only',
+    badge: 'Offline',
   },
   {
     id: 'finnhub',
@@ -72,8 +72,8 @@ export const providerList = [
   },
 ];
 
-// Default provider
-export const DEFAULT_PROVIDER = 'yahoo';
+// Default provider (yfinance for live data with IV support)
+export const DEFAULT_PROVIDER = 'yfinance';
 
 // Storage key for persisting provider selection
 export const PROVIDER_STORAGE_KEY = 'stock_quote_provider';

@@ -52,6 +52,15 @@ class SearchResult(BaseModel):
     quoteType: Optional[str] = None
 
 
+class IVResponse(BaseModel):
+    symbol: str
+    iv: float  # Implied volatility as percentage (e.g., 25.5 for 25.5%)
+    atmStrike: Optional[float] = None
+    expirationDate: Optional[str] = None
+    source: str = "options_chain"
+    timestamp: str
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -94,6 +103,79 @@ async def get_quote(symbol: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/iv/{symbol}", response_model=IVResponse)
+async def get_implied_volatility(symbol: str):
+    """
+    Get implied volatility for a stock from its options chain.
+    Returns the IV of the ATM (at-the-money) option for the nearest expiration.
+    """
+    from datetime import datetime
+
+    try:
+        ticker = yf.Ticker(symbol.upper())
+
+        # Get current price for ATM calculation
+        info = ticker.info
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if not current_price:
+            raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
+
+        # Get available expiration dates
+        expirations = ticker.options
+        if not expirations:
+            # No options available - return estimated IV based on beta
+            beta = info.get("beta", 1.0) or 1.0
+            estimated_iv = 20 + (beta - 1) * 15  # Higher beta = higher IV
+            return IVResponse(
+                symbol=symbol.upper(),
+                iv=round(max(15, min(80, estimated_iv)), 1),
+                source="estimated_from_beta",
+                timestamp=datetime.now().isoformat()
+            )
+
+        # Get the nearest expiration (first one)
+        nearest_exp = expirations[0]
+
+        # Get options chain for nearest expiration
+        chain = ticker.option_chain(nearest_exp)
+        calls = chain.calls
+
+        if calls.empty:
+            raise HTTPException(status_code=404, detail=f"No options data for symbol: {symbol}")
+
+        # Find ATM strike (closest to current price)
+        calls['distance'] = abs(calls['strike'] - current_price)
+        atm_row = calls.loc[calls['distance'].idxmin()]
+
+        # Get implied volatility (yfinance returns it as decimal, e.g., 0.25 for 25%)
+        iv = atm_row.get('impliedVolatility', 0.30)
+
+        # Convert to percentage if needed
+        if iv < 1:
+            iv = iv * 100
+
+        return IVResponse(
+            symbol=symbol.upper(),
+            iv=round(iv, 1),
+            atmStrike=float(atm_row['strike']),
+            expirationDate=nearest_exp,
+            source="options_chain",
+            timestamp=datetime.now().isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Fallback to estimated IV
+        from datetime import datetime
+        return IVResponse(
+            symbol=symbol.upper(),
+            iv=30.0,  # Default fallback
+            source="fallback",
+            timestamp=datetime.now().isoformat()
+        )
 
 
 @app.get("/search")
