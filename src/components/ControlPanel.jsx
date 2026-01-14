@@ -8,7 +8,6 @@ export default function ControlPanel({
   currentPrice,
   strikePrice,
   daysToExpiry,
-  impliedVol,
   riskFreeRate,
   investmentAmount,
   isCall,
@@ -20,7 +19,6 @@ export default function ControlPanel({
   onCurrentPriceChange,
   onStrikePriceChange,
   onDaysToExpiryChange,
-  onImpliedVolChange,
   onRiskFreeRateChange,
   onInvestmentAmountChange,
   onIsCallChange,
@@ -189,7 +187,7 @@ export default function ControlPanel({
       </div>
 
       {/* Main inputs grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <div>
           <label className="block text-xs text-gray-400 mb-1">Stock Price $</label>
           <input
@@ -225,18 +223,6 @@ export default function ControlPanel({
           />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">IV %</label>
-          <input
-            type="number"
-            value={impliedVol}
-            onChange={(e) => onImpliedVolChange(Number(e.target.value) || 30)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1"
-            min="1"
-            max="200"
-          />
-        </div>
-        <div>
           <label className="block text-xs text-gray-400 mb-1">Risk-Free Rate %</label>
           <input
             type="number"
@@ -258,31 +244,6 @@ export default function ControlPanel({
             step="1000"
             min="100"
           />
-        </div>
-      </div>
-
-      {/* IV Slider */}
-      <div>
-        <label className="block text-xs text-gray-400 mb-1">
-          Implied Volatility: {impliedVol}%
-          <span className="text-gray-500 ml-2">
-            ({impliedVol < 20 ? 'Very Low' : impliedVol < 30 ? 'Low' : impliedVol < 45 ? 'Normal' : impliedVol < 60 ? 'High' : 'Very High'})
-          </span>
-        </label>
-        <input
-          type="range"
-          min={5}
-          max={150}
-          value={impliedVol}
-          onChange={(e) => onImpliedVolChange(Number(e.target.value))}
-          className="w-full h-2 bg-gray-700 rounded-lg cursor-pointer accent-purple-500"
-        />
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
-          <span>5%</span>
-          <span>30%</span>
-          <span>60%</span>
-          <span>100%</span>
-          <span>150%</span>
         </div>
       </div>
     </div>

@@ -1,6 +1,13 @@
 # Stock vs Options Academic Simulator
 
+[![Live Demo](https://img.shields.io/badge/demo-stocksandoptions.org-blue)](https://stocksandoptions.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
+
 A full-featured, academic-grade simulator for comparing stock ownership versus options positions. Visualize the linear vs nonlinear P&L tradeoffs with realistic market data, probability distributions, and comprehensive analysis tools.
+
+**[Try it live at stocksandoptions.org](https://stocksandoptions.org)**
+
+![Stock vs Options Simulator Preview](public/og-image.png)
 
 ## Core Concept
 
@@ -11,9 +18,10 @@ A full-featured, academic-grade simulator for comparing stock ownership versus o
 ## Features
 
 ### Data & Pricing
-- Real-time options data via Tradier API (with offline/manual fallback)
+- **Multi-provider API system** - Yahoo Finance, yfinance, Finnhub, Twelve Data, Alpha Vantage, FMP
 - Black-Scholes pricing with full Greeks (delta, gamma, theta, vega, rho)
 - Preset scenarios for common market conditions
+- User accounts to save API keys (Supabase auth)
 
 ### Visualization
 - Interactive P&L visualization with adjustable axis controls
@@ -73,15 +81,23 @@ Open http://localhost:5173 in your browser.
 - **Framework**: React 18 + Vite
 - **Styling**: Tailwind CSS
 - **Charts**: Recharts
-- **Data**: Tradier API (primary), Yahoo Finance (fallback), manual input
+- **Auth & Database**: Supabase (PostgreSQL + Auth)
+- **Data Providers**: Yahoo Finance, yfinance, Finnhub, Twelve Data, Alpha Vantage, FMP
+- **Backend**: FastAPI (Python) for yfinance
+- **Deployment**: Vercel (frontend)
 
-## API Setup (Optional)
+## API Providers
 
-For real market data, obtain a free API key from [Tradier](https://developer.tradier.com/):
+The app supports multiple stock quote providers:
 
-1. Sign up for a Tradier developer account
-2. Copy your API token
-3. Enter it in the app settings
+| Provider | API Key Required | Notes |
+|----------|-----------------|-------|
+| Yahoo Finance | No | Default, free |
+| yfinance | No | Requires backend server |
+| Finnhub | Yes | [Get free key](https://finnhub.io/) |
+| Twelve Data | Yes | [Get free key](https://twelvedata.com/) |
+| Alpha Vantage | Yes | [Get free key](https://alphavantage.co/) |
+| FMP | Yes | [Get free key](https://financialmodelingprep.com/) |
 
 The simulator works fully offline with manual parameter input.
 

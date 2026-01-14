@@ -56,3 +56,13 @@ dkms.conf
 node_modules
 .vercel
 dist
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Python
+backend/venv/
+__pycache__/
+*.pyc

@@ -20,13 +20,22 @@ import ExportMenu from './components/ExportMenu';
 import MultiStrikePanel from './components/MultiStrikePanel';
 import AIInterpretation from './components/AIInterpretation';
 import AnimatedPLChart from './components/AnimatedPLChart';
+import VolatilityControls from './components/VolatilityControls';
+import APIProviderSelector from './components/APIProviderSelector';
+import UserMenu from './components/Auth/UserMenu';
+import AuthModal from './components/Auth/AuthModal';
+import { useAuth } from './contexts/AuthContext';
 
 // Data
 import { presets, getPresetById } from './data/presets';
-import { fetchQuote, getEstimatedIV } from './api/stockQuote';
+import { fetchQuote, getEstimatedIV, getStoredProvider, getStoredApiKeys } from './api/stockQuote';
 import { loadGroqApiKey } from './api/groqApi';
 
 export default function App() {
+  // Auth
+  const { apiKeys: authApiKeys, setApiKeys: setAuthApiKeys } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // Main parameters
   const [currentPrice, setCurrentPrice] = useState(175);
   const [strikePrice, setStrikePrice] = useState(180);
@@ -44,6 +53,12 @@ export default function App() {
 
   // Expected move override (null = use IV-implied volatility)
   const [expectedMoveOverride, setExpectedMoveOverride] = useState(null);
+
+  // API Provider state
+  const [selectedProvider, setSelectedProvider] = useState(() => getStoredProvider());
+  // Use auth context's API keys (synced with Supabase when logged in, localStorage otherwise)
+  const apiKeys = authApiKeys;
+  const setApiKeys = setAuthApiKeys;
 
   // Quote status
   const [quoteStatus, setQuoteStatus] = useState('manual'); // 'live', 'fallback', 'loading', 'error', 'manual'
@@ -213,7 +228,7 @@ export default function App() {
     setIsLoading(true);
     setQuoteStatus('loading');
     try {
-      const quote = await fetchQuote(sym);
+      const quote = await fetchQuote(sym, { provider: selectedProvider, apiKeys });
       setCurrentPrice(Math.round(quote.price * 100) / 100);
       setSymbol(sym);
       setQuoteName(quote.name || '');
@@ -236,7 +251,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [isCall]);
+  }, [isCall, selectedProvider, apiKeys]);
 
   // Load preset
   const handleLoadPreset = useCallback((presetId) => {
@@ -303,6 +318,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      {/* Auth Modal */}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -310,48 +328,75 @@ export default function App() {
             <h1 className="text-xl font-bold">Stock vs Options Simulator</h1>
             <p className="text-gray-500 text-xs">Black-Scholes pricing • Log-normal distribution • Academic analysis</p>
           </div>
-          <ExportMenu
-            chartRef={chartRef}
-            chartData={chartData}
-            params={{ currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall }}
-            stats={stats}
-            onExportPNG={handleExportPNG}
-            onExportCSV={handleExportCSV}
-            onExportPDF={handleExportPDF}
-            onCopyURL={handleCopyURL}
-          />
+          <div className="flex items-center gap-3">
+            <UserMenu onOpenAuth={() => setShowAuthModal(true)} />
+            <ExportMenu
+              chartRef={chartRef}
+              chartData={chartData}
+              params={{ currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall }}
+              stats={stats}
+              onExportPNG={handleExportPNG}
+              onExportCSV={handleExportCSV}
+              onExportPDF={handleExportPDF}
+              onCopyURL={handleCopyURL}
+            />
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-4">
-        {/* Control Panel */}
-        <ControlPanel
-          currentPrice={currentPrice}
-          strikePrice={strikePrice}
-          daysToExpiry={daysToExpiry}
+        {/* Volatility Controls - Always visible at top */}
+        <VolatilityControls
           impliedVol={impliedVol}
-          riskFreeRate={riskFreeRate}
-          investmentAmount={investmentAmount}
-          isCall={isCall}
-          symbol={symbol}
-          quoteStatus={quoteStatus}
-          quoteName={quoteName}
-          quoteChange={quoteChange}
-          quoteChangePercent={quoteChangePercent}
-          onCurrentPriceChange={setCurrentPrice}
-          onStrikePriceChange={setStrikePrice}
-          onDaysToExpiryChange={setDaysToExpiry}
           onImpliedVolChange={setImpliedVol}
-          onRiskFreeRateChange={setRiskFreeRate}
-          onInvestmentAmountChange={setInvestmentAmount}
-          onIsCallChange={setIsCall}
-          onSymbolChange={setSymbol}
-          onLoadQuote={handleLoadQuote}
-          isLoading={isLoading}
-          lastUpdated={lastUpdated}
-          presets={presets}
-          onLoadPreset={handleLoadPreset}
+          expectedMoveOverride={expectedMoveOverride}
+          onExpectedMoveChange={setExpectedMoveOverride}
+          impliedMovePercent={impliedMovePercent}
+          daysToExpiry={daysToExpiry}
+          currentPrice={currentPrice}
         />
+
+        {/* Control Panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+          {/* API Provider Selector */}
+          <div className="lg:col-span-1">
+            <APIProviderSelector
+              selectedProvider={selectedProvider}
+              onProviderChange={setSelectedProvider}
+              apiKeys={apiKeys}
+              onApiKeyChange={setApiKeys}
+            />
+          </div>
+
+          {/* Main Controls */}
+          <div className="lg:col-span-3">
+            <ControlPanel
+              currentPrice={currentPrice}
+              strikePrice={strikePrice}
+              daysToExpiry={daysToExpiry}
+              riskFreeRate={riskFreeRate}
+              investmentAmount={investmentAmount}
+              isCall={isCall}
+              symbol={symbol}
+              quoteStatus={quoteStatus}
+              quoteName={quoteName}
+              quoteChange={quoteChange}
+              quoteChangePercent={quoteChangePercent}
+              onCurrentPriceChange={setCurrentPrice}
+              onStrikePriceChange={setStrikePrice}
+              onDaysToExpiryChange={setDaysToExpiry}
+              onRiskFreeRateChange={setRiskFreeRate}
+              onInvestmentAmountChange={setInvestmentAmount}
+              onIsCallChange={setIsCall}
+              onSymbolChange={setSymbol}
+              onLoadQuote={handleLoadQuote}
+              isLoading={isLoading}
+              lastUpdated={lastUpdated}
+              presets={presets}
+              onLoadPreset={handleLoadPreset}
+            />
+          </div>
+        </div>
 
         {/* Option Pricing Summary */}
         <div className="bg-gray-900 rounded-lg p-3 mb-4 flex flex-wrap gap-4 justify-center text-sm">

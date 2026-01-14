@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Status**: Active development - React/Vite application with Tailwind CSS
 
+**Live Site**: https://stocksandoptions.org
+
 **License**: Apache 2.0
 
 ## Build Commands
@@ -17,6 +19,20 @@ npm install          # Install dependencies
 npm run dev          # Start dev server with hot reload (http://localhost:5173)
 npm run build        # Build for production
 npm run preview      # Preview production build
+
+# Backend (optional - for yfinance provider)
+cd backend
+pip install -r requirements.txt
+python main.py       # Runs on http://localhost:8000
+```
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_YFINANCE_BACKEND_URL=http://localhost:8000  # Optional
 ```
 
 ## Project Structure
@@ -37,6 +53,11 @@ npm run preview      # Preview production build
     ExportMenu.jsx           # Export options (PNG, CSV, PDF, URL)
     AIInterpretation.jsx     # AI-powered analysis (optional)
     TradeoffExplanation.jsx  # Educational explanations
+    VolatilityControls.jsx   # IV and Expected Move sliders (top of page)
+    APIProviderSelector.jsx  # Multi-provider API dropdown
+    /Auth
+      AuthModal.jsx          # Login/signup modal
+      UserMenu.jsx           # User menu in header
   /utils
     blackScholes.js          # B-S pricing formulas
     greeks.js                # Greek calculations
@@ -44,13 +65,33 @@ npm run preview      # Preview production build
     statistics.js            # Stats calculations, formatting helpers
     exportHelpers.js         # PNG, CSV, PDF, URL generation
   /api
-    stockQuote.js            # Quote fetching with fallbacks
+    stockQuote.js            # Quote fetching with provider factory
     groqApi.js               # AI integration (optional)
+    /providers               # Multi-provider API system
+      index.js               # Provider registry and factory
+      yahoo.js               # Yahoo Finance (free, no key)
+      yfinance.js            # yfinance via backend (free)
+      finnhub.js             # Finnhub API (key required)
+      twelveData.js          # Twelve Data API (key required)
+      alphaVantage.js        # Alpha Vantage API (key required)
+      fmp.js                 # Financial Modeling Prep (key required)
+  /contexts
+    AuthContext.jsx          # Supabase auth context
+  /lib
+    supabase.js              # Supabase client
   /data
     presets.js               # Preset scenarios
   App.jsx                    # Main application component (state hub)
   main.jsx                   # Entry point
   index.css                  # Tailwind directives
+
+/backend                     # Python yfinance backend
+  main.py                    # FastAPI server
+  requirements.txt           # Python dependencies
+
+/supabase                    # Supabase configuration
+  /migrations                # Database migrations
+  config.toml                # Supabase config
 ```
 
 ## Key Technical Decisions
@@ -58,7 +99,52 @@ npm run preview      # Preview production build
 - **Charts**: Recharts for main visualizations (supports responsive containers, reference lines)
 - **Styling**: Tailwind CSS with dark mode default
 - **State**: React useState/useMemo with state lifted to App.jsx
-- **API**: Tradier API primary (free tier with Greeks), manual fallback for offline use
+- **Auth**: Supabase Auth with Row Level Security (RLS)
+- **Database**: Supabase PostgreSQL for user API keys and preferences
+- **API Providers**: Multi-provider system with factory pattern
+  - Free: Yahoo Finance, yfinance (via backend)
+  - Key required: Finnhub, Twelve Data, Alpha Vantage, FMP
+- **Backend**: FastAPI Python server for yfinance (optional)
+- **Deployment**: Vercel (frontend), Railway/Render (backend optional)
+
+## API Provider System
+
+The app supports multiple stock quote providers via a factory pattern:
+
+```javascript
+// src/api/providers/index.js
+const providers = {
+  yahoo: { name: 'Yahoo Finance', requiresKey: false },
+  yfinance: { name: 'yfinance (Backend)', requiresKey: false },
+  finnhub: { name: 'Finnhub', requiresKey: true },
+  twelvedata: { name: 'Twelve Data', requiresKey: true },
+  alphavantage: { name: 'Alpha Vantage', requiresKey: true },
+  fmp: { name: 'FMP', requiresKey: true },
+};
+
+// Usage
+const quote = await fetchQuote('AAPL', { provider: 'yahoo', apiKeys });
+```
+
+## Supabase Database Schema
+
+```sql
+-- User API keys (encrypted storage)
+CREATE TABLE user_api_keys (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  provider TEXT NOT NULL,
+  api_key TEXT NOT NULL,
+  UNIQUE(user_id, provider)
+);
+
+-- User preferences
+CREATE TABLE user_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id),
+  preferred_provider TEXT DEFAULT 'yahoo',
+  theme TEXT DEFAULT 'dark'
+);
+```
 
 ## State Management Architecture
 
