@@ -18,7 +18,8 @@ A full-featured, academic-grade simulator for comparing stock ownership versus o
 ## Features
 
 ### Data & Pricing
-- **Multi-provider API system** - Yahoo Finance, yfinance, Finnhub, Twelve Data, Alpha Vantage, FMP
+- **Live stock quotes and IV** - Real-time data via yfinance backend
+- **Live implied volatility** - Fetched from options chains (not hardcoded!)
 - Black-Scholes pricing with full Greeks (delta, gamma, theta, vega, rho)
 - Preset scenarios for common market conditions
 - User accounts to save API keys (Supabase auth)
@@ -92,14 +93,32 @@ The app supports multiple stock quote providers:
 
 | Provider | API Key Required | Notes |
 |----------|-----------------|-------|
-| Yahoo Finance | No | Default, free |
-| yfinance | No | Requires backend server |
+| **yfinance** | No | **Default** - Live data + IV from options chain |
+| Yahoo Finance | No | Offline only (CORS blocked) - uses cached data |
 | Finnhub | Yes | [Get free key](https://finnhub.io/) |
 | Twelve Data | Yes | [Get free key](https://twelvedata.com/) |
 | Alpha Vantage | Yes | [Get free key](https://alphavantage.co/) |
 | FMP | Yes | [Get free key](https://financialmodelingprep.com/) |
 
 The simulator works fully offline with manual parameter input.
+
+## Backend Deployment (for yfinance provider)
+
+The yfinance provider requires a Python backend. Deploy it to **Render.com** (free tier):
+
+1. Go to [render.com](https://render.com) and sign up
+2. Click "New +" → "Blueprint"
+3. Connect your GitHub repo
+4. Render will auto-detect `render.yaml` and deploy the backend
+5. Copy the deployed URL (e.g., `https://stock-options-backend.onrender.com`)
+6. Update `VITE_YFINANCE_BACKEND_URL` in your Vercel environment variables
+
+**Or deploy manually:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
 ## Documentation
 
