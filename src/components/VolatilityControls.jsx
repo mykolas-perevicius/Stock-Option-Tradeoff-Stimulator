@@ -1,4 +1,5 @@
 import React from 'react';
+import IVMethodSelector from './IVMethodSelector';
 
 /**
  * Volatility Controls Component (MARKET VIEW - Read-Only)
@@ -17,6 +18,12 @@ export default function VolatilityControls({
   currentPrice,
   pricingEdge,
   pricingEdgePercent,
+  // IV Method props
+  selectedIVMethod = 'market',
+  onIVMethodChange,
+  allVolatilities = {},
+  isLoadingHistory = false,
+  historyError = null,
 }) {
   const getIVLevel = (iv) => {
     if (iv < 20) return { text: 'Very Low', color: 'text-green-400', bg: 'bg-green-900/30' };
@@ -42,7 +49,7 @@ export default function VolatilityControls({
         <span className="text-xs text-gray-500 ml-auto">From options chain pricing</span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Market IV Display */}
         <div className="bg-gray-900/50 rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
@@ -72,6 +79,19 @@ export default function VolatilityControls({
             ±${marketDollarMove.toFixed(2)} ({currentPrice.toFixed(2)} × {marketExpectedMove.toFixed(1)}%)
           </p>
         </div>
+
+        {/* IV Method Selector */}
+        {onIVMethodChange && (
+          <div className="bg-gray-900/50 rounded-lg p-3">
+            <IVMethodSelector
+              selectedMethod={selectedIVMethod}
+              onMethodChange={onIVMethodChange}
+              volatilities={allVolatilities}
+              isLoadingHistory={isLoadingHistory}
+              historyError={historyError}
+            />
+          </div>
+        )}
       </div>
 
       {/* Comparison with User's View (if different) */}

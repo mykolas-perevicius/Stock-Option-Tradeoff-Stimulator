@@ -27,7 +27,18 @@ export default function PLChart({
   maxPL,
   showBrush = false,
   onBrushChange,
+  isCall = true,
+  stockPosition = 'long',
+  optionPosition = 'long',
 }) {
+  // Dynamic labels based on position direction
+  const stockLabel = stockPosition === 'long' ? 'Long Stock P&L' : 'Short Stock P&L';
+  const optionLabel = `${optionPosition === 'long' ? 'Long' : 'Short'} ${isCall ? 'Call' : 'Put'} P&L`;
+
+  // Stock color: green for long, red for short (unlimited risk)
+  const stockColor = stockPosition === 'long' ? '#10B981' : '#EF4444';
+  // Option color: orange for long, red for short call (unlimited), orange for short put
+  const optionColor = optionPosition === 'short' && isCall ? '#EF4444' : '#F59E0B';
   // Custom tooltip formatter
   const tooltipFormatter = (value, name) => {
     return [formatCurrency(value), name];
@@ -102,18 +113,18 @@ export default function PLChart({
           <Line
             type="monotone"
             dataKey="stockPL"
-            stroke="#10B981"
+            stroke={stockColor}
             strokeWidth={3}
             dot={false}
-            name="Stock P&L"
+            name={stockLabel}
           />
           <Line
             type="monotone"
             dataKey="optionPL"
-            stroke="#F59E0B"
+            stroke={optionColor}
             strokeWidth={3}
             dot={false}
-            name="Option P&L"
+            name={optionLabel}
           />
 
           {/* Optional brush for zooming */}

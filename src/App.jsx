@@ -7,6 +7,7 @@ import { calcAllGreeks } from './utils/greeks';
 import { stockProbability, generatePriceRange, priceAtSigma } from './utils/probability';
 import { calculateStats, formatCurrency, formatPrice, expectedMoveToIV, ivToExpectedMove } from './utils/statistics';
 import { parseURLParams, exportToPNG, exportToCSV, exportToPDF, copyShareableURL } from './utils/exportHelpers';
+import { getAllVolatilities as calculateAllVolatilities } from './utils/volatilityCalculations';
 
 // Components
 import ControlPanel from './components/ControlPanel';
@@ -22,7 +23,7 @@ import MultiStrikePanel from './components/MultiStrikePanel';
 import AIInterpretation from './components/AIInterpretation';
 import AnimatedPLChart from './components/AnimatedPLChart';
 import VolatilityControls from './components/VolatilityControls';
-import APIProviderSelector from './components/APIProviderSelector';
+// APIProviderSelector is now embedded in ControlPanel
 import UserMenu from './components/Auth/UserMenu';
 import AuthModal from './components/Auth/AuthModal';
 import SavedSetups from './components/SavedSetups';
@@ -32,7 +33,8 @@ import { saveLastState, getLastState, simulationToState } from './lib/supabase';
 // Data
 import { presets, getPresetById } from './data/presets';
 import { fetchQuote, fetchIV, getEstimatedIV, getStoredProvider, getStoredApiKeys } from './api/stockQuote';
-import { loadGroqApiKey } from './api/groqApi';
+import { loadApiKeys as loadAIApiKeys } from './api/aiApi';
+import { yfinanceProvider } from './api/providers/yfinance';
 
 export default function App() {
   // Auth
@@ -56,6 +58,10 @@ export default function App() {
   const [investmentAmount, setInvestmentAmount] = useState(10000);
   const [isCall, setIsCall] = useState(true);
   const [symbol, setSymbol] = useState('AAPL');
+
+  // Position direction (long = buy, short = sell)
+  const [stockPosition, setStockPosition] = useState('long'); // 'long' | 'short'
+  const [optionPosition, setOptionPosition] = useState('long'); // 'long' | 'short'
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
@@ -82,6 +88,13 @@ export default function App() {
   const [maxPrice, setMaxPrice] = useState(210);
   const [minPL, setMinPL] = useState(-10000);
   const [maxPL, setMaxPL] = useState(20000);
+
+  // IV calculation method state
+  const [selectedIVMethod, setSelectedIVMethod] = useState('market');
+  const [historicalData, setHistoricalData] = useState({ closePrices: [], ohlcData: [] });
+  const [allVolatilities, setAllVolatilities] = useState({});
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
 
   // Refs for export
   const chartRef = useRef(null);
@@ -150,7 +163,7 @@ export default function App() {
   // For backwards compatibility, greeks uses user's sigma
   const greeks = userGreeks;
 
-  // Generate chart data
+  // Generate chart data - handles both long and short positions
   const chartData = useMemo(() => {
     const steps = 100;
     const priceStep = (maxPrice - minPrice) / steps;
@@ -160,15 +173,33 @@ export default function App() {
       const price = minPrice + i * priceStep;
       const prob = stockProbability(price, currentPrice, T, r, sigma) * priceStep;
 
-      const stockPL = sharesOwned * (price - currentPrice);
+      // Stock P&L - depends on position direction
+      let stockPL;
+      if (stockPosition === 'long') {
+        // Long stock: profit when price rises
+        stockPL = sharesOwned * (price - currentPrice);
+      } else {
+        // Short stock: profit when price falls (borrow and sell, buy back later)
+        stockPL = sharesOwned * (currentPrice - price);
+      }
 
+      // Option intrinsic value at expiration
       let optionIntrinsic;
       if (isCall) {
         optionIntrinsic = Math.max(0, price - strikePrice) * optionShares;
       } else {
         optionIntrinsic = Math.max(0, strikePrice - price) * optionShares;
       }
-      const optionPL = optionIntrinsic - totalPremiumPaid;
+
+      // Option P&L - depends on position direction
+      let optionPL;
+      if (optionPosition === 'long') {
+        // Long option: pay premium, receive intrinsic value
+        optionPL = optionIntrinsic - totalPremiumPaid;
+      } else {
+        // Short option: receive premium, pay out intrinsic value
+        optionPL = totalPremiumPaid - optionIntrinsic;
+      }
 
       points.push({
         price: Math.round(price * 100) / 100,
@@ -179,9 +210,9 @@ export default function App() {
     }
 
     return points;
-  }, [minPrice, maxPrice, currentPrice, strikePrice, T, r, sigma, isCall, sharesOwned, optionShares, totalPremiumPaid]);
+  }, [minPrice, maxPrice, currentPrice, strikePrice, T, r, sigma, isCall, sharesOwned, optionShares, totalPremiumPaid, stockPosition, optionPosition]);
 
-  // Calculate statistics
+  // Calculate statistics - includes position direction
   const stats = useMemo(() => {
     return calculateStats(chartData, {
       currentPrice,
@@ -195,8 +226,10 @@ export default function App() {
       r,
       sigma,
       isCall,
+      stockPosition,
+      optionPosition,
     });
-  }, [chartData, currentPrice, strikePrice, premium, investmentAmount, sharesOwned, optionShares, totalPremiumPaid, T, r, sigma, isCall]);
+  }, [chartData, currentPrice, strikePrice, premium, investmentAmount, sharesOwned, optionShares, totalPremiumPaid, T, r, sigma, isCall, stockPosition, optionPosition]);
 
   // Generate SEPARATE probability distribution data (independent of P&L chart range)
   // This uses its own range based on ±3 sigma to show the full distribution
@@ -246,7 +279,7 @@ export default function App() {
   // Load URL parameters and initialize on mount
   useEffect(() => {
     // Load Groq API key from localStorage
-    loadGroqApiKey();
+    loadAIApiKeys();
 
     const urlParams = parseURLParams();
     if (urlParams) {
@@ -262,6 +295,43 @@ export default function App() {
       handleLoadQuote('AAPL');
     }
   }, []);
+
+  // Fetch historical data when symbol changes (for IV calculations)
+  useEffect(() => {
+    if (!symbol) return;
+
+    const fetchHistoricalData = async () => {
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+
+      try {
+        // Fetch 1 year of historical data
+        const history = await yfinanceProvider.fetchHistory(symbol, '1y');
+        setHistoricalData({
+          closePrices: history.closePrices,
+          ohlcData: history.ohlcData,
+        });
+      } catch (error) {
+        console.warn('Failed to fetch historical data:', error.message);
+        setHistoryError(error.message);
+        setHistoricalData({ closePrices: [], ohlcData: [] });
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    fetchHistoricalData();
+  }, [symbol]);
+
+  // Calculate all volatilities when historical data or market IV changes
+  useEffect(() => {
+    const vols = calculateAllVolatilities({
+      marketIV,
+      closePrices: historicalData.closePrices,
+      ohlcData: historicalData.ohlcData,
+    });
+    setAllVolatilities(vols);
+  }, [marketIV, historicalData]);
 
   // Load last saved state when user logs in
   useEffect(() => {
@@ -527,49 +597,47 @@ export default function App() {
           currentPrice={currentPrice}
           pricingEdge={pricingEdge}
           pricingEdgePercent={pricingEdgePercent}
+          selectedIVMethod={selectedIVMethod}
+          onIVMethodChange={setSelectedIVMethod}
+          allVolatilities={allVolatilities}
+          isLoadingHistory={isLoadingHistory}
+          historyError={historyError}
         />
 
-        {/* Control Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
-          {/* API Provider Selector */}
-          <div className="lg:col-span-1">
-            <APIProviderSelector
-              selectedProvider={selectedProvider}
-              onProviderChange={setSelectedProvider}
-              apiKeys={apiKeys}
-              onApiKeyChange={setApiKeys}
-            />
-          </div>
-
-          {/* Main Controls */}
-          <div className="lg:col-span-3">
-            <ControlPanel
-              currentPrice={currentPrice}
-              strikePrice={strikePrice}
-              daysToExpiry={daysToExpiry}
-              riskFreeRate={riskFreeRate}
-              investmentAmount={investmentAmount}
-              isCall={isCall}
-              symbol={symbol}
-              quoteStatus={quoteStatus}
-              quoteName={quoteName}
-              quoteChange={quoteChange}
-              quoteChangePercent={quoteChangePercent}
-              onCurrentPriceChange={setCurrentPrice}
-              onStrikePriceChange={setStrikePrice}
-              onDaysToExpiryChange={setDaysToExpiry}
-              onRiskFreeRateChange={setRiskFreeRate}
-              onInvestmentAmountChange={setInvestmentAmount}
-              onIsCallChange={setIsCall}
-              onSymbolChange={setSymbol}
-              onLoadQuote={handleLoadQuote}
-              isLoading={isLoading}
-              lastUpdated={lastUpdated}
-              presets={presets}
-              onLoadPreset={handleLoadPreset}
-            />
-          </div>
-        </div>
+        {/* Control Panel - now includes API Provider and Position Selectors */}
+        <ControlPanel
+          currentPrice={currentPrice}
+          strikePrice={strikePrice}
+          daysToExpiry={daysToExpiry}
+          riskFreeRate={riskFreeRate}
+          investmentAmount={investmentAmount}
+          isCall={isCall}
+          symbol={symbol}
+          quoteStatus={quoteStatus}
+          quoteName={quoteName}
+          quoteChange={quoteChange}
+          quoteChangePercent={quoteChangePercent}
+          onCurrentPriceChange={setCurrentPrice}
+          onStrikePriceChange={setStrikePrice}
+          onDaysToExpiryChange={setDaysToExpiry}
+          onRiskFreeRateChange={setRiskFreeRate}
+          onInvestmentAmountChange={setInvestmentAmount}
+          onIsCallChange={setIsCall}
+          onSymbolChange={setSymbol}
+          onLoadQuote={handleLoadQuote}
+          isLoading={isLoading}
+          lastUpdated={lastUpdated}
+          presets={presets}
+          onLoadPreset={handleLoadPreset}
+          selectedProvider={selectedProvider}
+          onProviderChange={setSelectedProvider}
+          apiKeys={apiKeys}
+          onApiKeyChange={setApiKeys}
+          stockPosition={stockPosition}
+          optionPosition={optionPosition}
+          onStockPositionChange={setStockPosition}
+          onOptionPositionChange={setOptionPosition}
+        />
 
         {/* Option Pricing Summary */}
         <div className="bg-gray-900 rounded-lg p-3 mb-4 flex flex-wrap gap-4 justify-center text-sm">
@@ -629,6 +697,9 @@ export default function App() {
             maxPrice={maxPrice}
             minPL={minPL}
             maxPL={maxPL}
+            stockPosition={stockPosition}
+            optionPosition={optionPosition}
+            isCall={isCall}
           />
 
           <AnimatedPLChart
@@ -643,6 +714,8 @@ export default function App() {
             maxPrice={maxPrice}
             minPL={minPL}
             maxPL={maxPL}
+            stockPosition={stockPosition}
+            optionPosition={optionPosition}
           />
 
           <ProbabilityChart
@@ -705,6 +778,8 @@ export default function App() {
               userImpliedIV={userImpliedIV}
               pricingEdge={pricingEdge}
               pricingEdgePercent={pricingEdgePercent}
+              stockPosition={stockPosition}
+              optionPosition={optionPosition}
             />
             <AIInterpretation
               symbol={symbol}

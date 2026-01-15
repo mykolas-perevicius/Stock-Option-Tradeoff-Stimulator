@@ -30,6 +30,8 @@ export default function AnimatedPLChart({
   maxPrice,
   minPL,
   maxPL,
+  stockPosition = 'long',
+  optionPosition = 'long',
 }) {
   const [displayDays, setDisplayDays] = useState(daysToExpiry);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -81,12 +83,28 @@ export default function AnimatedPLChart({
 
     for (let i = 0; i <= steps; i++) {
       const price = minPrice + i * priceStep;
-      const stockPL = sharesOwned * (price - currentPrice);
+
+      // Stock P&L - depends on position direction
+      let stockPL;
+      if (stockPosition === 'long') {
+        stockPL = sharesOwned * (price - currentPrice);
+      } else {
+        // Short stock: profit when price falls
+        stockPL = sharesOwned * (currentPrice - price);
+      }
 
       // Option value at current time
       const currentOptionPrice = optionPrice(price, strikePrice, T, r, sigma, isCall);
       const optionValue = currentOptionPrice * optionShares;
-      const optionPL = optionValue - totalPremiumPaid;
+
+      // Option P&L - depends on position direction
+      let optionPL;
+      if (optionPosition === 'long') {
+        optionPL = optionValue - totalPremiumPaid;
+      } else {
+        // Short option: receive premium, pay out option value
+        optionPL = totalPremiumPaid - optionValue;
+      }
 
       // At expiration (intrinsic only)
       let expirationIntrinsic;
@@ -95,7 +113,13 @@ export default function AnimatedPLChart({
       } else {
         expirationIntrinsic = Math.max(0, strikePrice - price) * optionShares;
       }
-      const expirationPL = expirationIntrinsic - totalPremiumPaid;
+
+      let expirationPL;
+      if (optionPosition === 'long') {
+        expirationPL = expirationIntrinsic - totalPremiumPaid;
+      } else {
+        expirationPL = totalPremiumPaid - expirationIntrinsic;
+      }
 
       points.push({
         price: Math.round(price * 100) / 100,

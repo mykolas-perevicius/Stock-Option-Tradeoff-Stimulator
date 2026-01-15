@@ -6,10 +6,13 @@ import {
   saveGroqApiKey,
   clearGroqApiKey,
   getGroqApiKey,
-} from '../api/groqApi';
+  loadApiKeys,
+  isAIAvailable,
+} from '../api/aiApi';
 
 /**
- * AI-powered interpretation panel using Groq
+ * AI-powered interpretation panel
+ * Uses Gemini (free) with Groq fallback
  */
 export default function AIInterpretation({
   symbol,
@@ -29,9 +32,11 @@ export default function AIInterpretation({
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [isConfigured, setIsConfigured] = useState(isGroqConfigured());
+  const [provider, setProvider] = useState(null); // 'gemini', 'groq', or 'local'
 
-  // Check configuration on mount
+  // Check configuration on mount and load API keys
   useEffect(() => {
+    loadApiKeys();
     setIsConfigured(isGroqConfigured());
   }, []);
 
@@ -51,19 +56,18 @@ export default function AIInterpretation({
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setProvider(null);
 
     try {
-      if (!isGroqConfigured()) {
-        // Use fallback if no API key
-        setInterpretation(getFallbackInterpretation(analysisData));
-      } else {
-        const result = await generateInterpretation(analysisData);
-        setInterpretation(result);
-      }
+      // generateInterpretation tries Gemini -> Groq -> Local fallback
+      const result = await generateInterpretation(analysisData);
+      setInterpretation(result.text);
+      setProvider(result.provider);
     } catch (err) {
       setError(err.message);
       // Show fallback on error
       setInterpretation(getFallbackInterpretation(analysisData));
+      setProvider('local');
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +160,17 @@ export default function AIInterpretation({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <span>🤖</span> AI Interpretation
-          <span className="text-xs bg-purple-600 px-2 py-0.5 rounded">Llama 3</span>
+          {provider && (
+            <span className={`text-xs px-2 py-0.5 rounded ${
+              provider === 'gemini' ? 'bg-blue-600' :
+              provider === 'groq' ? 'bg-purple-600' :
+              'bg-gray-600'
+            }`}>
+              {provider === 'gemini' ? 'Gemini' :
+               provider === 'groq' ? 'Llama 3' :
+               'Local'}
+            </span>
+          )}
         </h3>
         <div className="flex gap-2">
           {isConfigured ? (
@@ -245,9 +259,7 @@ export default function AIInterpretation({
           <div className="text-4xl mb-3">💡</div>
           <p>Click "Generate Explanation" to get an AI-powered interpretation</p>
           <p className="text-xs mt-2">
-            {isConfigured
-              ? 'Using Groq API with Llama 3'
-              : 'Will use local fallback (add API key for AI-powered insights)'}
+            Using Google Gemini (free) with Groq fallback
           </p>
         </div>
       )}

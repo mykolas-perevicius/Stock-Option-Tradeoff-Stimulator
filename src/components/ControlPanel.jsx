@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatPrice } from '../utils/statistics';
+import APIProviderSelector from './APIProviderSelector';
 
 /**
  * Main control panel for simulation parameters
@@ -28,6 +29,16 @@ export default function ControlPanel({
   lastUpdated,
   presets,
   onLoadPreset,
+  // API Provider props
+  selectedProvider,
+  onProviderChange,
+  apiKeys,
+  onApiKeyChange,
+  // Position props
+  stockPosition,
+  optionPosition,
+  onStockPositionChange,
+  onOptionPositionChange,
 }) {
   const [symbolInput, setSymbolInput] = useState(symbol || 'AAPL');
 
@@ -115,6 +126,18 @@ export default function ControlPanel({
         )}
       </div>
 
+      {/* Data Provider Selector - integrated into control panel */}
+      {selectedProvider !== undefined && (
+        <div className="mb-4">
+          <APIProviderSelector
+            selectedProvider={selectedProvider}
+            onProviderChange={onProviderChange}
+            apiKeys={apiKeys}
+            onApiKeyChange={onApiKeyChange}
+          />
+        </div>
+      )}
+
       {/* Quick stock buttons */}
       <div className="mb-4">
         <label className="block text-xs text-gray-400 mb-1">Popular Stocks</label>
@@ -159,32 +182,130 @@ export default function ControlPanel({
         </div>
       )}
 
-      {/* Call/Put Toggle */}
-      <div className="mb-4">
-        <label className="block text-xs text-gray-400 mb-1">Option Type</label>
-        <div className="flex rounded overflow-hidden border border-gray-600">
-          <button
-            onClick={() => onIsCallChange(true)}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              isCall
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
-          >
-            Call (Bullish)
-          </button>
-          <button
-            onClick={() => onIsCallChange(false)}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              !isCall
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
-          >
-            Put (Bearish)
-          </button>
+      {/* Stock Position Toggle */}
+      {stockPosition !== undefined && (
+        <div className="mb-4">
+          <label className="block text-xs text-gray-400 mb-1">Stock Position</label>
+          <div className="flex rounded overflow-hidden border border-gray-600">
+            <button
+              onClick={() => onStockPositionChange('long')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                stockPosition === 'long'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Long Stock (Buy)
+            </button>
+            <button
+              onClick={() => onStockPositionChange('short')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                stockPosition === 'short'
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Short Stock (Sell)
+            </button>
+          </div>
+          {/* Warning for short stock */}
+          {stockPosition === 'short' && (
+            <div className="mt-2 p-2 bg-red-900/30 border border-red-500/50 rounded text-xs text-red-300">
+              ⚠️ <strong>Short Stock:</strong> Maximum loss is theoretically UNLIMITED. Stock can rise indefinitely.
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Option Position Selector (4-way) */}
+      {optionPosition !== undefined && (
+        <div className="mb-4">
+          <label className="block text-xs text-gray-400 mb-1">Option Position</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { onOptionPositionChange('long'); onIsCallChange(true); }}
+              className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
+                optionPosition === 'long' && isCall
+                  ? 'bg-green-600 border-green-500 text-white'
+                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Buy Call
+            </button>
+            <button
+              onClick={() => { onOptionPositionChange('short'); onIsCallChange(true); }}
+              className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
+                optionPosition === 'short' && isCall
+                  ? 'bg-red-600 border-red-500 text-white'
+                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Sell Call ⚠️
+            </button>
+            <button
+              onClick={() => { onOptionPositionChange('long'); onIsCallChange(false); }}
+              className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
+                optionPosition === 'long' && !isCall
+                  ? 'bg-red-600 border-red-500 text-white'
+                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Buy Put
+            </button>
+            <button
+              onClick={() => { onOptionPositionChange('short'); onIsCallChange(false); }}
+              className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
+                optionPosition === 'short' && !isCall
+                  ? 'bg-green-600 border-green-500 text-white'
+                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Sell Put
+            </button>
+          </div>
+          {/* Warning for naked short call */}
+          {optionPosition === 'short' && isCall && (
+            <div className="mt-2 p-2 bg-red-900/30 border border-red-500/50 rounded text-xs text-red-300">
+              ⚠️ <strong>Naked Short Call:</strong> Maximum loss is theoretically UNLIMITED. The stock can rise indefinitely.
+            </div>
+          )}
+          {/* Info for short put */}
+          {optionPosition === 'short' && !isCall && (
+            <div className="mt-2 p-2 bg-yellow-900/30 border border-yellow-500/50 rounded text-xs text-yellow-300">
+              ℹ️ <strong>Short Put:</strong> Maximum loss = (Strike - Premium) × 100 per contract. You may be assigned shares.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Legacy Call/Put Toggle - only show if position props not provided */}
+      {optionPosition === undefined && (
+        <div className="mb-4">
+          <label className="block text-xs text-gray-400 mb-1">Option Type</label>
+          <div className="flex rounded overflow-hidden border border-gray-600">
+            <button
+              onClick={() => onIsCallChange(true)}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                isCall
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Call (Bullish)
+            </button>
+            <button
+              onClick={() => onIsCallChange(false)}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                !isCall
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Put (Bearish)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main inputs grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

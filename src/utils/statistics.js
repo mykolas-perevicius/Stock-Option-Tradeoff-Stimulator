@@ -19,6 +19,8 @@ export function calculateStats(chartData, params) {
     r,
     sigma,
     isCall = true,
+    stockPosition = 'long',
+    optionPosition = 'long',
   } = params;
 
   let stockEV = 0;
@@ -90,9 +92,27 @@ export function calculateStats(chartData, params) {
   // Find crossover price
   const crossoverPrice = findCrossoverPrice(currentPrice, strikePrice, premium, sharesOwned, optionShares);
 
-  // Maximum losses
-  const stockMaxLoss = -investmentAmount; // Stock goes to 0
-  const optionMaxLoss = -totalPremiumPaid; // Premium paid
+  // Maximum losses - depend on position direction
+  let stockMaxLoss, optionMaxLoss;
+
+  if (stockPosition === 'long') {
+    stockMaxLoss = -investmentAmount; // Long stock: max loss if stock goes to 0
+  } else {
+    stockMaxLoss = null; // Short stock: UNLIMITED loss (stock can rise indefinitely)
+  }
+
+  if (optionPosition === 'long') {
+    optionMaxLoss = -totalPremiumPaid; // Long option: max loss is premium paid
+  } else {
+    // Short option: depends on call vs put
+    if (isCall) {
+      optionMaxLoss = null; // Short call: UNLIMITED loss (stock can rise indefinitely)
+    } else {
+      // Short put: max loss = (strike price × shares) - premium received
+      // Worst case: stock goes to $0, you buy at strike
+      optionMaxLoss = -(strikePrice * optionShares) + totalPremiumPaid;
+    }
+  }
 
   return {
     // Expected Values
@@ -112,9 +132,9 @@ export function calculateStats(chartData, params) {
     optionAvgWin: optionProfitProb > 0 ? Math.round(optionWinSum / optionProfitProb) : 0,
     optionAvgLoss: optionLossProb > 0 ? Math.round(optionLossSum / optionLossProb) : 0,
 
-    // Maximum Losses
-    stockMaxLoss: Math.round(stockMaxLoss),
-    optionMaxLoss: Math.round(optionMaxLoss),
+    // Maximum Losses (null = unlimited)
+    stockMaxLoss: stockMaxLoss === null ? null : Math.round(stockMaxLoss),
+    optionMaxLoss: optionMaxLoss === null ? null : Math.round(optionMaxLoss),
 
     // Value at Risk
     stockVaR95: Math.round(stockVaR95),

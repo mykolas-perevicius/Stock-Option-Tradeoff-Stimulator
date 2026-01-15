@@ -24,6 +24,8 @@ export default function RiskRewardPanel({
   userImpliedIV,
   pricingEdge,
   pricingEdgePercent,
+  stockPosition = 'long',
+  optionPosition = 'long',
 }) {
   // Use user's move if set, otherwise use market-implied
   const effectiveMove = userExpectedMove !== null ? userExpectedMove : marketExpectedMove;
@@ -175,7 +177,12 @@ export default function RiskRewardPanel({
 
           {/* Stock Downside */}
           <div className="mb-4 pb-4 border-b border-gray-700">
-            <h4 className="text-sm text-green-400 mb-2">Stock</h4>
+            <h4 className="text-sm text-green-400 mb-2">
+              {stockPosition === 'long' ? 'Long Stock' : 'Short Stock'}
+            </h4>
+            {stockPosition === 'short' && (
+              <p className="text-xs text-red-400 mb-2">⚠️ Short stock has unlimited loss potential</p>
+            )}
             <StatBar
               label="Probability of Loss"
               value={stats.stockLossProb}
@@ -189,7 +196,9 @@ export default function RiskRewardPanel({
               </div>
               <div>
                 <span className="text-gray-500">Max Loss:</span>
-                <span className="text-red-400 ml-1">{formatCurrency(stats.stockMaxLoss)}</span>
+                <span className={`ml-1 ${stats.stockMaxLoss === null ? 'text-red-500 font-bold' : 'text-red-400'}`}>
+                  {stats.stockMaxLoss === null ? 'UNLIMITED' : formatCurrency(stats.stockMaxLoss)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-500">VaR (95%):</span>
@@ -204,7 +213,9 @@ export default function RiskRewardPanel({
 
           {/* Options Downside */}
           <div>
-            <h4 className="text-sm text-yellow-400 mb-2">Options</h4>
+            <h4 className="text-sm text-yellow-400 mb-2">
+              {optionPosition === 'long' ? 'Long' : 'Short'} {isCall ? 'Call' : 'Put'}
+            </h4>
             <StatBar
               label="Probability of Loss"
               value={stats.optionLossProb}
@@ -218,7 +229,9 @@ export default function RiskRewardPanel({
               </div>
               <div>
                 <span className="text-gray-500">Max Loss:</span>
-                <span className="text-red-400 ml-1">{formatCurrency(-totalPremiumPaid)}</span>
+                <span className={`ml-1 ${stats.optionMaxLoss === null ? 'text-red-500 font-bold' : 'text-red-400'}`}>
+                  {stats.optionMaxLoss === null ? 'UNLIMITED' : formatCurrency(stats.optionMaxLoss)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-500">VaR (95%):</span>
@@ -230,7 +243,13 @@ export default function RiskRewardPanel({
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Options have defined risk: max loss is premium paid ({formatCurrency(-totalPremiumPaid)})
+              {optionPosition === 'long' ? (
+                <>Options have defined risk: max loss is premium paid ({formatCurrency(-totalPremiumPaid)})</>
+              ) : isCall ? (
+                <span className="text-red-400">⚠️ Short calls have UNLIMITED loss potential</span>
+              ) : (
+                <>Short put max loss: assignment at strike ({formatCurrency(stats.optionMaxLoss)})</>
+              )}
             </p>
           </div>
         </div>
@@ -243,7 +262,9 @@ export default function RiskRewardPanel({
 
           {/* Stock Upside */}
           <div className="mb-4 pb-4 border-b border-gray-700">
-            <h4 className="text-sm text-green-400 mb-2">Stock</h4>
+            <h4 className="text-sm text-green-400 mb-2">
+              {stockPosition === 'long' ? 'Long Stock' : 'Short Stock'}
+            </h4>
             <StatBar
               label="Probability of Profit"
               value={stats.stockWinProb}
@@ -272,7 +293,9 @@ export default function RiskRewardPanel({
 
           {/* Options Upside */}
           <div>
-            <h4 className="text-sm text-yellow-400 mb-2">Options</h4>
+            <h4 className="text-sm text-yellow-400 mb-2">
+              {optionPosition === 'long' ? 'Long' : 'Short'} {isCall ? 'Call' : 'Put'}
+            </h4>
             <StatBar
               label="Probability of Profit"
               value={stats.optionProfitProb}

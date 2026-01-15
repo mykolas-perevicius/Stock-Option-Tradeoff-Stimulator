@@ -160,4 +160,89 @@ export const yfinanceProvider = {
       return false;
     }
   },
+
+  /**
+   * Fetch historical price data for volatility calculations
+   * @param {string} symbol - Stock symbol
+   * @param {string} period - Time period (1y, 2y, 5y, etc.)
+   * @returns {Promise<object>} Historical data with closePrices and ohlcData
+   */
+  async fetchHistory(symbol, period = '1y') {
+    const upperSymbol = symbol.toUpperCase().trim();
+
+    // Check cache first
+    const cacheKey = `${upperSymbol}-history-${period}`;
+    const cached = quoteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION * 5) {
+      // Cache history for 5 minutes
+      return cached.data;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // History can be slow
+
+    try {
+      const response = await fetch(
+        `${YFINANCE_BACKEND_URL}/history/${upperSymbol}?period=${period}&interval=1d`,
+        {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No history for symbol: ${upperSymbol}`);
+        }
+        throw new Error(`yfinance history HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.data || data.data.length === 0) {
+        throw new Error(`No historical data for ${upperSymbol}`);
+      }
+
+      // Extract close prices and OHLC data
+      const closePrices = data.data.map((d) => d.close).filter((p) => p > 0);
+      const ohlcData = data.data
+        .filter((d) => d.open > 0 && d.high > 0 && d.low > 0 && d.close > 0)
+        .map((d) => ({
+          date: d.date,
+          open: d.open,
+          high: d.high,
+          low: d.low,
+          close: d.close,
+          volume: d.volume,
+        }));
+
+      const result = {
+        symbol: upperSymbol,
+        closePrices,
+        ohlcData,
+        dataPoints: data.data.length,
+        period,
+        timestamp: new Date().toISOString(),
+      };
+
+      quoteCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+
+      return result;
+    } catch (error) {
+      clearTimeout(timeout);
+
+      if (error.name === 'AbortError') {
+        throw new Error('History request timed out');
+      }
+
+      throw error;
+    }
+  },
 };
