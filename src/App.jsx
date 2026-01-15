@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { optionPrice, intrinsicValue, timeValue, breakevenPrice } from './utils/blackScholes';
 import { calcAllGreeks } from './utils/greeks';
 import { stockProbability, generatePriceRange, priceAtSigma } from './utils/probability';
-import { calculateStats, formatCurrency, formatPrice } from './utils/statistics';
+import { calculateStats, formatCurrency, formatPrice, expectedMoveToIV, ivToExpectedMove } from './utils/statistics';
 import { parseURLParams, exportToPNG, exportToCSV, exportToPDF, copyShareableURL } from './utils/exportHelpers';
 
 // Components
@@ -40,7 +40,7 @@ export default function App() {
   const [currentPrice, setCurrentPrice] = useState(175);
   const [strikePrice, setStrikePrice] = useState(180);
   const [daysToExpiry, setDaysToExpiry] = useState(30);
-  const [impliedVol, setImpliedVol] = useState(28);
+  const [marketIV, setMarketIV] = useState(28); // Market IV from API (read-only in UI)
   const [riskFreeRate, setRiskFreeRate] = useState(5);
   const [investmentAmount, setInvestmentAmount] = useState(10000);
   const [isCall, setIsCall] = useState(true);
@@ -51,8 +51,8 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'greeks', 'scenarios'
 
-  // Expected move override (null = use IV-implied volatility)
-  const [expectedMoveOverride, setExpectedMoveOverride] = useState(null);
+  // User's expected move prediction (null = use market IV-implied move)
+  const [userExpectedMove, setUserExpectedMove] = useState(null);
 
   // API Provider state
   const [selectedProvider, setSelectedProvider] = useState(() => getStoredProvider());
@@ -77,23 +77,45 @@ export default function App() {
 
   // Derived values
   const T = Math.max(0.001, daysToExpiry / 365);
-  const baseImpliedVol = Math.max(0.01, impliedVol / 100);
   const r = riskFreeRate / 100;
 
-  // Calculate IV-implied expected move (for display and as baseline)
-  const impliedMovePercent = baseImpliedVol * Math.sqrt(T) * 100;
+  // MARKET VALUES (from API - read-only)
+  const marketSigma = Math.max(0.01, marketIV / 100);
+  const marketExpectedMove = ivToExpectedMove(marketIV, T); // Market-implied expected move %
 
-  // If user overrides expected move, calculate equivalent sigma
-  // expectedMove% = sigma * sqrt(T) * 100, so sigma = expectedMove% / (sqrt(T) * 100)
-  const sigma = expectedMoveOverride !== null
-    ? Math.max(0.01, expectedMoveOverride / (Math.sqrt(T) * 100))
-    : baseImpliedVol;
+  // USER VALUES (user's prediction - editable)
+  // If user sets an expected move, calculate what IV that implies
+  const userSigma = userExpectedMove !== null
+    ? Math.max(0.01, userExpectedMove / (Math.sqrt(T) * 100))
+    : marketSigma;
+  const userImpliedIV = userSigma * 100; // What IV the user's move implies
+  const effectiveUserMove = userExpectedMove !== null ? userExpectedMove : marketExpectedMove;
 
-  // Calculate option price using Black-Scholes
-  const premium = useMemo(() => {
-    const price = optionPrice(currentPrice, strikePrice, T, r, sigma, isCall);
+  // For backwards compatibility with existing code, sigma is the user's choice
+  const sigma = userSigma;
+
+  // Calculate the difference between user and market views
+  const ivDifference = userImpliedIV - marketIV; // Positive = user expects MORE volatility
+  const ivDifferencePercent = marketIV > 0 ? (ivDifference / marketIV) * 100 : 0;
+
+  // Calculate option prices using Black-Scholes - DUAL CALCULATIONS
+  // Market premium: what the option should cost based on market IV
+  const marketPremium = useMemo(() => {
+    const price = optionPrice(currentPrice, strikePrice, T, r, marketSigma, isCall);
     return Math.max(0.01, Math.round(price * 100) / 100);
-  }, [currentPrice, strikePrice, T, r, sigma, isCall]);
+  }, [currentPrice, strikePrice, T, r, marketSigma, isCall]);
+
+  // User premium: what the option would be worth if user's expected move is correct
+  const userPremium = useMemo(() => {
+    const price = optionPrice(currentPrice, strikePrice, T, r, userSigma, isCall);
+    return Math.max(0.01, Math.round(price * 100) / 100);
+  }, [currentPrice, strikePrice, T, r, userSigma, isCall]);
+
+  // Use market premium as the actual trading price (what you'd pay)
+  const premium = marketPremium;
+  // Calculate pricing edge: if user is right, options are underpriced by this amount
+  const pricingEdge = userPremium - marketPremium;
+  const pricingEdgePercent = marketPremium > 0 ? (pricingEdge / marketPremium) * 100 : 0;
 
   const intrinsic = intrinsicValue(currentPrice, strikePrice, isCall);
   const timeVal = Math.max(0, Math.round((premium - intrinsic) * 100) / 100);
@@ -105,10 +127,17 @@ export default function App() {
   const optionShares = contractsOwned * 100;
   const totalPremiumPaid = contractsOwned * premium * 100;
 
-  // Greeks
-  const greeks = useMemo(() => {
-    return calcAllGreeks(currentPrice, strikePrice, T, r, sigma, isCall);
-  }, [currentPrice, strikePrice, T, r, sigma, isCall]);
+  // Greeks - DUAL CALCULATIONS
+  const marketGreeks = useMemo(() => {
+    return calcAllGreeks(currentPrice, strikePrice, T, r, marketSigma, isCall);
+  }, [currentPrice, strikePrice, T, r, marketSigma, isCall]);
+
+  const userGreeks = useMemo(() => {
+    return calcAllGreeks(currentPrice, strikePrice, T, r, userSigma, isCall);
+  }, [currentPrice, strikePrice, T, r, userSigma, isCall]);
+
+  // For backwards compatibility, greeks uses user's sigma
+  const greeks = userGreeks;
 
   // Generate chart data
   const chartData = useMemo(() => {
@@ -213,7 +242,7 @@ export default function App() {
       setCurrentPrice(urlParams.currentPrice);
       setStrikePrice(urlParams.strikePrice);
       setDaysToExpiry(urlParams.daysToExpiry);
-      setImpliedVol(urlParams.impliedVol);
+      setMarketIV(urlParams.impliedVol);
       setRiskFreeRate(urlParams.riskFreeRate);
       setInvestmentAmount(urlParams.investmentAmount);
       setIsCall(urlParams.isCall);
@@ -242,7 +271,9 @@ export default function App() {
 
       // Fetch live IV from backend (falls back to estimate if unavailable)
       const ivData = await fetchIV(sym);
-      setImpliedVol(ivData.iv);
+      setMarketIV(ivData.iv);
+      // Reset user expected move when loading new quote (use market's view)
+      setUserExpectedMove(null);
       console.log(`IV for ${sym}: ${ivData.iv}% (source: ${ivData.source})`);
 
       setLastUpdated(new Date().toLocaleTimeString());
@@ -261,7 +292,8 @@ export default function App() {
       setCurrentPrice(preset.params.currentPrice);
       setStrikePrice(preset.params.strikePrice);
       setDaysToExpiry(preset.params.daysToExpiry);
-      setImpliedVol(preset.params.impliedVol);
+      setMarketIV(preset.params.impliedVol);
+      setUserExpectedMove(null); // Reset user prediction when loading preset
       setRiskFreeRate(preset.params.riskFreeRate);
       setInvestmentAmount(preset.params.investmentAmount);
       setIsCall(preset.params.isCall);
@@ -282,12 +314,12 @@ export default function App() {
       currentPrice,
       strikePrice,
       daysToExpiry,
-      impliedVol,
+      impliedVol: marketIV,
       riskFreeRate,
       investmentAmount,
       isCall,
     }, `options-data-${symbol || 'simulation'}.csv`);
-  }, [chartData, currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall, symbol]);
+  }, [chartData, currentPrice, strikePrice, daysToExpiry, marketIV, riskFreeRate, investmentAmount, isCall, symbol]);
 
   const handleExportPDF = useCallback(async () => {
     await exportToPDF({
@@ -295,7 +327,7 @@ export default function App() {
         currentPrice,
         strikePrice,
         daysToExpiry,
-        impliedVol,
+        impliedVol: marketIV,
         riskFreeRate,
         investmentAmount,
         isCall,
@@ -303,19 +335,19 @@ export default function App() {
       stats,
       greeks,
     }, `options-report-${symbol || 'simulation'}.pdf`);
-  }, [currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall, stats, greeks, symbol]);
+  }, [currentPrice, strikePrice, daysToExpiry, marketIV, riskFreeRate, investmentAmount, isCall, stats, greeks, symbol]);
 
   const handleCopyURL = useCallback(async () => {
     await copyShareableURL({
       currentPrice,
       strikePrice,
       daysToExpiry,
-      impliedVol,
+      impliedVol: marketIV,
       riskFreeRate,
       investmentAmount,
       isCall,
     });
-  }, [currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall]);
+  }, [currentPrice, strikePrice, daysToExpiry, marketIV, riskFreeRate, investmentAmount, isCall]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -334,7 +366,7 @@ export default function App() {
             <ExportMenu
               chartRef={chartRef}
               chartData={chartData}
-              params={{ currentPrice, strikePrice, daysToExpiry, impliedVol, riskFreeRate, investmentAmount, isCall }}
+              params={{ currentPrice, strikePrice, daysToExpiry, impliedVol: marketIV, riskFreeRate, investmentAmount, isCall }}
               stats={stats}
               onExportPNG={handleExportPNG}
               onExportCSV={handleExportCSV}
@@ -346,15 +378,16 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto p-4">
-        {/* Volatility Controls - Always visible at top */}
+        {/* Volatility Controls - Always visible at top (MARKET VIEW - read-only) */}
         <VolatilityControls
-          impliedVol={impliedVol}
-          onImpliedVolChange={setImpliedVol}
-          expectedMoveOverride={expectedMoveOverride}
-          onExpectedMoveChange={setExpectedMoveOverride}
-          impliedMovePercent={impliedMovePercent}
+          marketIV={marketIV}
+          marketExpectedMove={marketExpectedMove}
+          userExpectedMove={userExpectedMove}
+          userImpliedIV={userImpliedIV}
           daysToExpiry={daysToExpiry}
           currentPrice={currentPrice}
+          pricingEdge={pricingEdge}
+          pricingEdgePercent={pricingEdgePercent}
         />
 
         {/* Control Panel */}
@@ -483,8 +516,9 @@ export default function App() {
             sigma={sigma}
             minPrice={probabilityData.minPrice}
             maxPrice={probabilityData.maxPrice}
-            expectedMoveOverride={expectedMoveOverride}
-            impliedMovePercent={impliedMovePercent}
+            userExpectedMove={userExpectedMove}
+            marketExpectedMove={marketExpectedMove}
+            userImpliedIV={userImpliedIV}
           />
         </div>
 
@@ -524,11 +558,14 @@ export default function App() {
               sharesOwned={sharesOwned}
               optionShares={optionShares}
               isCall={isCall}
-              impliedVol={impliedVol}
+              marketIV={marketIV}
               daysToExpiry={daysToExpiry}
-              expectedMoveOverride={expectedMoveOverride}
-              onExpectedMoveChange={setExpectedMoveOverride}
-              impliedMovePercent={impliedMovePercent}
+              userExpectedMove={userExpectedMove}
+              onUserExpectedMoveChange={setUserExpectedMove}
+              marketExpectedMove={marketExpectedMove}
+              userImpliedIV={userImpliedIV}
+              pricingEdge={pricingEdge}
+              pricingEdgePercent={pricingEdgePercent}
             />
             <AIInterpretation
               symbol={symbol}
@@ -537,7 +574,7 @@ export default function App() {
               premium={premium}
               breakeven={breakeven}
               daysToExpiry={daysToExpiry}
-              impliedVol={impliedVol}
+              impliedVol={marketIV}
               isCall={isCall}
               stats={stats}
               greeks={greeks}
@@ -549,14 +586,14 @@ export default function App() {
           <MultiStrikePanel
             currentPrice={currentPrice}
             daysToExpiry={daysToExpiry}
-            impliedVol={impliedVol}
+            marketIV={marketIV}
             sigma={sigma}
             riskFreeRate={riskFreeRate}
             investmentAmount={investmentAmount}
             isCall={isCall}
             minPrice={minPrice}
             maxPrice={maxPrice}
-            expectedMoveOverride={expectedMoveOverride}
+            userExpectedMove={userExpectedMove}
           />
         )}
 
@@ -593,7 +630,7 @@ export default function App() {
             currentPrice={currentPrice}
             strikePrice={strikePrice}
             daysToExpiry={daysToExpiry}
-            impliedVol={impliedVol}
+            impliedVol={marketIV}
             riskFreeRate={riskFreeRate}
             investmentAmount={investmentAmount}
             isCall={isCall}

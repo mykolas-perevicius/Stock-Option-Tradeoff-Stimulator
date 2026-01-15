@@ -1,9 +1,10 @@
-import React from 'react';
-import { formatCurrency, formatPercent, formatPrice } from '../utils/statistics';
+import React, { useMemo } from 'react';
+import { formatCurrency, formatPercent, formatPrice, expectedMoveToIV } from '../utils/statistics';
 import TradeoffExplanation from './TradeoffExplanation';
 
 /**
  * Risk/Reward analysis panel showing comprehensive statistics
+ * Includes the user's Expected Move slider (this is where users set their prediction)
  */
 export default function RiskRewardPanel({
   stats,
@@ -15,14 +16,26 @@ export default function RiskRewardPanel({
   sharesOwned,
   optionShares,
   isCall,
-  impliedVol,
+  marketIV,
   daysToExpiry,
-  expectedMoveOverride,
-  onExpectedMoveChange,
-  impliedMovePercent,
+  userExpectedMove,
+  onUserExpectedMoveChange,
+  marketExpectedMove,
+  userImpliedIV,
+  pricingEdge,
+  pricingEdgePercent,
 }) {
-  // Use override if set, otherwise use implied
-  const expectedMove = expectedMoveOverride !== null ? expectedMoveOverride : impliedMovePercent;
+  // Use user's move if set, otherwise use market-implied
+  const effectiveMove = userExpectedMove !== null ? userExpectedMove : marketExpectedMove;
+
+  // Calculate slider bounds with proper minimums
+  const { minExpected, maxExpected, stepSize } = useMemo(() => {
+    const min = Math.max(0.5, Math.min(marketExpectedMove * 0.2, 1));
+    const max = Math.max(marketExpectedMove * 3, min + 5, 10);
+    const range = max - min;
+    const step = range < 5 ? 0.1 : range < 20 ? 0.5 : 1;
+    return { minExpected: min, maxExpected: max, stepSize: step };
+  }, [marketExpectedMove]);
 
   const StatBar = ({ label, value, maxValue, color, subtext }) => {
     const width = Math.min(100, Math.max(0, (Math.abs(value) / maxValue) * 100));
@@ -43,60 +56,113 @@ export default function RiskRewardPanel({
     );
   };
 
+  const isUsingCustomMove = userExpectedMove !== null;
+
   return (
     <div className="space-y-4">
-      {/* Expected Move Control */}
-      <div className="bg-gray-900 rounded-lg p-4">
+      {/* Expected Move Control (USER'S PREDICTION) */}
+      <div className="bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-800/50 rounded-lg p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-md font-semibold text-purple-400 flex items-center gap-2">
-            <span>🎯</span> Your Expected Move
+            <span>🎯</span> Your Expected Move Prediction
           </h3>
-          {expectedMoveOverride !== null && (
+          {isUsingCustomMove && (
             <button
-              onClick={() => onExpectedMoveChange(null)}
+              onClick={() => onUserExpectedMoveChange(null)}
               className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-gray-300"
             >
-              Reset to IV
+              Reset to Market
             </button>
           )}
         </div>
         <p className="text-xs text-gray-400 mb-3">
-          The market implies a <strong className="text-white">{impliedMovePercent.toFixed(1)}%</strong> move
-          based on {impliedVol}% IV over {daysToExpiry} days. Adjust if you expect a different move:
+          Market expects <strong className="text-blue-400">±{marketExpectedMove.toFixed(1)}%</strong> move
+          based on {marketIV.toFixed(1)}% IV over {daysToExpiry} days.
+          {' '}Adjust if you disagree:
         </p>
+
         <div className="flex items-center gap-4">
           <input
             type="range"
-            min={Math.max(1, impliedMovePercent * 0.2)}
-            max={impliedMovePercent * 3}
-            step={0.5}
-            value={expectedMove}
-            onChange={(e) => onExpectedMoveChange(parseFloat(e.target.value))}
+            min={minExpected}
+            max={maxExpected}
+            step={stepSize}
+            value={effectiveMove}
+            onChange={(e) => onUserExpectedMoveChange(parseFloat(e.target.value))}
             className="flex-1 h-2 bg-gray-700 rounded-lg cursor-pointer accent-purple-500"
           />
-          <div className="w-24 text-center">
-            <span className={`text-lg font-bold ${
-              expectedMove > impliedMovePercent * 1.2 ? 'text-yellow-400' :
-              expectedMove < impliedMovePercent * 0.8 ? 'text-green-400' : 'text-blue-400'
+          <div className="w-28 text-center">
+            <span className={`text-xl font-bold ${
+              isUsingCustomMove
+                ? effectiveMove > marketExpectedMove * 1.2 ? 'text-yellow-400'
+                  : effectiveMove < marketExpectedMove * 0.8 ? 'text-green-400'
+                  : 'text-purple-400'
+                : 'text-blue-400'
             }`}>
-              {expectedMove.toFixed(1)}%
+              ±{effectiveMove.toFixed(1)}%
             </span>
           </div>
         </div>
+
         <div className="flex justify-between text-xs text-gray-500 mt-1">
-          <span>Low ({(impliedMovePercent * 0.2).toFixed(0)}%)</span>
-          <span>IV-Implied ({impliedMovePercent.toFixed(0)}%)</span>
-          <span>High ({(impliedMovePercent * 3).toFixed(0)}%)</span>
+          <span>Low ({minExpected.toFixed(1)}%)</span>
+          <span className="text-blue-400">Market: {marketExpectedMove.toFixed(1)}%</span>
+          <span>High ({maxExpected.toFixed(0)}%)</span>
         </div>
-        {expectedMoveOverride !== null && expectedMoveOverride > impliedMovePercent * 1.2 && (
-          <p className="text-xs text-yellow-400 mt-2">
-            You expect larger moves than the market - options may offer an edge if you're right.
-          </p>
-        )}
-        {expectedMoveOverride !== null && expectedMoveOverride < impliedMovePercent * 0.8 && (
-          <p className="text-xs text-green-400 mt-2">
-            You expect smaller moves than the market is pricing - stock may be the better choice.
-          </p>
+
+        {/* Comparison Display when user has set a custom move */}
+        {isUsingCustomMove && (
+          <div className="mt-4 pt-3 border-t border-purple-800/50">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-blue-900/30 rounded p-2">
+                <div className="text-xs text-gray-400">Market Move</div>
+                <div className="text-lg font-semibold text-blue-400">±{marketExpectedMove.toFixed(1)}%</div>
+                <div className="text-xs text-gray-500">IV: {marketIV.toFixed(1)}%</div>
+              </div>
+              <div className="bg-purple-900/30 rounded p-2">
+                <div className="text-xs text-gray-400">Your Move</div>
+                <div className={`text-lg font-semibold ${
+                  effectiveMove > marketExpectedMove * 1.1 ? 'text-yellow-400' :
+                  effectiveMove < marketExpectedMove * 0.9 ? 'text-green-400' : 'text-purple-400'
+                }`}>
+                  ±{effectiveMove.toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">Your IV: {userImpliedIV.toFixed(1)}%</div>
+              </div>
+              <div className={`rounded p-2 ${
+                pricingEdge > 0.1 ? 'bg-green-900/30' : pricingEdge < -0.1 ? 'bg-red-900/30' : 'bg-gray-800/50'
+              }`}>
+                <div className="text-xs text-gray-400">Your Edge</div>
+                <div className={`text-lg font-semibold ${
+                  pricingEdge > 0.1 ? 'text-green-400' : pricingEdge < -0.1 ? 'text-red-400' : 'text-gray-400'
+                }`}>
+                  ${Math.abs(pricingEdge).toFixed(2)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {pricingEdge > 0.1 ? 'Underpriced' : pricingEdge < -0.1 ? 'Overpriced' : 'Fair'}
+                </div>
+              </div>
+            </div>
+
+            {/* Insight Messages */}
+            <div className="mt-3 text-sm">
+              {effectiveMove > marketExpectedMove * 1.2 && (
+                <div className="p-2 bg-yellow-900/20 rounded text-yellow-400">
+                  ⚡ <strong>You expect MORE volatility</strong> — If right, options are underpriced by ${pricingEdge.toFixed(2)} ({pricingEdgePercent.toFixed(1)}%)
+                </div>
+              )}
+              {effectiveMove < marketExpectedMove * 0.8 && (
+                <div className="p-2 bg-green-900/20 rounded text-green-400">
+                  📉 <strong>You expect LESS volatility</strong> — Stock may be better than paying for expensive options
+                </div>
+              )}
+              {effectiveMove >= marketExpectedMove * 0.8 && effectiveMove <= marketExpectedMove * 1.2 && (
+                <div className="p-2 bg-purple-900/20 rounded text-purple-400">
+                  ≈ <strong>Your view aligns with market</strong> — Options are fairly priced for your expectations
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -282,9 +348,9 @@ export default function RiskRewardPanel({
         sharesOwned={sharesOwned}
         optionShares={optionShares}
         isCall={isCall}
-        impliedVol={impliedVol}
+        impliedVol={marketIV}
         daysToExpiry={daysToExpiry}
-        expectedMove={expectedMoveOverride}
+        expectedMove={userExpectedMove}
       />
     </div>
   );

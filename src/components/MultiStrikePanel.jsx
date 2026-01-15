@@ -21,14 +21,14 @@ import { formatCurrency, formatPercent, formatPrice } from '../utils/statistics'
 export default function MultiStrikePanel({
   currentPrice,
   daysToExpiry,
-  impliedVol,
-  sigma, // Use adjusted sigma from parent (reflects expected move override)
+  marketIV,
+  sigma, // Use adjusted sigma from parent (reflects user's expected move or market)
   riskFreeRate,
   investmentAmount,
   isCall,
   minPrice,
   maxPrice,
-  expectedMoveOverride = null,
+  userExpectedMove = null,
 }) {
   const T = Math.max(0.001, daysToExpiry / 365);
   const r = riskFreeRate / 100;
@@ -130,7 +130,7 @@ export default function MultiStrikePanel({
       <div className="bg-gray-900 rounded-lg p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold">Multi-Strike Comparison</h3>
-          {expectedMoveOverride !== null && (
+          {userExpectedMove !== null && (
             <span className="text-xs px-2 py-1 bg-purple-900/50 text-purple-300 rounded">
               Using custom expected move
             </span>
@@ -139,7 +139,7 @@ export default function MultiStrikePanel({
         <p className="text-sm text-gray-400">
           Compare {isCall ? 'call' : 'put'} options at different strike prices for ${currentPrice.toFixed(2)} stock.
           All calculations assume ${investmentAmount.toLocaleString()} investment.
-          {expectedMoveOverride !== null && (
+          {userExpectedMove !== null && (
             <span className="text-purple-400"> Probability calculations reflect your custom expected move.</span>
           )}
         </p>

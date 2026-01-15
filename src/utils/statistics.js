@@ -233,3 +233,26 @@ export function formatPrice(val) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/**
+ * Convert Expected Move percentage to Implied Volatility
+ * Formula: IV = ExpectedMove% / sqrt(T)
+ * @param {number} expectedMovePercent - Expected move as percentage (e.g., 8.5 for 8.5%)
+ * @param {number} T - Time to expiry in years
+ * @returns {number} Implied volatility as percentage (e.g., 25 for 25%)
+ */
+export function expectedMoveToIV(expectedMovePercent, T) {
+  if (T <= 0) return 0;
+  return expectedMovePercent / Math.sqrt(T);
+}
+
+/**
+ * Convert Implied Volatility to Expected Move percentage
+ * Formula: ExpectedMove% = IV * sqrt(T)
+ * @param {number} ivPercent - IV as percentage (e.g., 25 for 25%)
+ * @param {number} T - Time to expiry in years
+ * @returns {number} Expected move as percentage (e.g., 8.5 for 8.5%)
+ */
+export function ivToExpectedMove(ivPercent, T) {
+  return ivPercent * Math.sqrt(T);
+}

@@ -28,8 +28,9 @@ export default function ProbabilityChart({
   minPrice,
   maxPrice,
   showConfidenceIntervals = true,
-  expectedMoveOverride = null,
-  impliedMovePercent = null,
+  userExpectedMove = null,
+  marketExpectedMove = null,
+  userImpliedIV = null,
 }) {
   // Calculate sigma levels based on current (possibly adjusted) sigma
   const sigma1Up = priceAtSigma(currentPrice, T, r, sigma, 1);
@@ -37,7 +38,7 @@ export default function ProbabilityChart({
   const sigma2Up = priceAtSigma(currentPrice, T, r, sigma, 2);
   const sigma2Down = priceAtSigma(currentPrice, T, r, sigma, -2);
 
-  // Calculate expected move percentage from current sigma
+  // Calculate expected move percentage from current sigma (user's view or market)
   const currentExpectedMove = sigma * Math.sqrt(T) * 100;
 
   // Data is already filtered to the probability-specific range (passed from parent)
@@ -54,7 +55,7 @@ export default function ProbabilityChart({
     return [`${value.toFixed(2)}%`, name];
   };
 
-  const isUsingCustomMove = expectedMoveOverride !== null;
+  const isUsingCustomMove = userExpectedMove !== null;
 
   return (
     <div className="bg-gray-900 rounded-lg p-4">
@@ -62,7 +63,7 @@ export default function ProbabilityChart({
         <h2 className="text-lg font-semibold">Price Probability Distribution</h2>
         {isUsingCustomMove && (
           <span className="text-xs px-2 py-1 bg-purple-900/50 text-purple-300 rounded">
-            Custom: {currentExpectedMove.toFixed(1)}% move (IV: {impliedMovePercent?.toFixed(1)}%)
+            Your View: ±{currentExpectedMove.toFixed(1)}% move (IV: {userImpliedIV?.toFixed(1)}%)
           </span>
         )}
       </div>
@@ -76,7 +77,7 @@ export default function ProbabilityChart({
             dataKey="price"
             stroke="#9CA3AF"
             domain={[minPrice, maxPrice]}
-            tickFormatter={(val) => `$${val}`}
+            tickFormatter={(val) => `$${Math.round(val)}`}
             type="number"
           />
           <YAxis stroke="#9CA3AF" hide />
@@ -155,7 +156,7 @@ export default function ProbabilityChart({
       </div>
       <p className="text-xs text-gray-500 text-center mt-1">
         {isUsingCustomMove
-          ? `Distribution based on your expected ${currentExpectedMove.toFixed(1)}% move (market implies ${impliedMovePercent?.toFixed(1)}%)`
+          ? `Distribution based on your expected ±${currentExpectedMove.toFixed(1)}% move (market: ±${marketExpectedMove?.toFixed(1)}%)`
           : `Distribution based on ${(sigma * 100).toFixed(0)}% implied volatility`
         }
       </p>
