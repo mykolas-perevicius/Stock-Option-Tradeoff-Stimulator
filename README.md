@@ -22,7 +22,12 @@ A full-featured, academic-grade simulator for comparing stock ownership versus o
 - **Live implied volatility** - Fetched from options chains (not hardcoded!)
 - Black-Scholes pricing with full Greeks (delta, gamma, theta, vega, rho)
 - Preset scenarios for common market conditions
-- User accounts to save API keys (Supabase auth)
+- User accounts with Supabase auth
+
+### User Features (Login Required)
+- **Save/Load Setups** - Save your simulation configurations with custom names
+- **Auto-save State** - Your last session is automatically restored on login
+- **Protected Options Data** - Advanced options analytics page (coming soon)
 
 ### Visualization
 - Interactive P&L visualization with adjustable axis controls
@@ -36,16 +41,30 @@ A full-featured, academic-grade simulator for comparing stock ownership versus o
 - VaR (Value at Risk) at 95% and 99% confidence levels
 - Probability of profit calculations for both stock and options
 
-### Expected Move Feature
-The expected move slider lets you override the market's implied volatility with your own expectation:
-- If you expect larger moves than IV implies, slide right to see how that affects option values
-- If you expect smaller moves, slide left
-- All charts, statistics, and probabilities update instantly:
-  - P&L charts
-  - Probability distribution
-  - Greeks panel
-  - Time decay visualization
-  - Multi-strike comparison
+### Market vs Your View (Dual Calculation)
+The app now separates market-implied IV from your personal expected move prediction:
+
+**Market View (Top Panel - Read-Only)**
+- Shows market IV and expected move from options chain pricing
+- This is what the market is pricing in
+
+**Your Expected Move (Bottom Panel - Editable)**
+- Adjust your personal prediction of stock volatility
+- See your implied IV calculated automatically
+- Compare your view to the market's view
+
+**Pricing Edge Display**
+- When your view differs from market, see the "pricing edge"
+- If you expect more volatility → options are underpriced for you
+- If you expect less volatility → options may be overpriced
+
+All charts, statistics, and probabilities update based on YOUR expected move:
+- P&L charts
+- Probability distribution
+- Greeks panel
+- Time decay visualization
+- Multi-strike comparison
+- Scenario analysis
 
 ### Export
 - Export to PNG, CSV, PDF
@@ -129,17 +148,30 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ### State Management
 The app uses React hooks (useState, useMemo) with state lifted to App.jsx:
-- **Expected move override** propagates to all components via adjusted sigma
+- **Dual sigma calculation**: `marketSigma` (from API) vs `userSigma` (from user's expected move)
+- **Dual premium calculation**: `marketPremium` (trading price) vs `userPremium` (theoretical value if user is right)
 - **Probability distribution** has its own independent data generation (±3σ range)
 - **P&L chart range** is separate from probability visualization
 
 ### Key Data Flows
 ```
+Market IV from API
+    → marketSigma, marketExpectedMove, marketPremium, marketGreeks
+
 User adjusts expected move slider
-    → Converts to equivalent sigma
-    → All components receive adjusted sigma
-    → Charts, stats, and probabilities recalculate
+    → userSigma, userImpliedIV, userPremium, userGreeks
+    → Pricing edge = userPremium - marketPremium
+    → All charts use userSigma for projections
 ```
+
+### Routing
+- `/` - Main simulator (public)
+- `/options` - Protected options data page (requires login)
+
+### Database Schema
+- `user_api_keys` - Encrypted API key storage per provider
+- `user_preferences` - User settings
+- `user_simulations` - Saved setups with auto-save last state
 
 ## License
 
