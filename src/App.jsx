@@ -556,20 +556,37 @@ export default function App() {
               <SavedSetups currentState={currentState} onLoadSetup={handleLoadSetup} />
             )}
             {user ? (
-              <Link
-                to="/options"
-                className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
-              >
-                Options Data
-              </Link>
+              <>
+                <Link
+                  to="/volatility"
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+                >
+                  Volatility
+                </Link>
+                <Link
+                  to="/options"
+                  className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
+                >
+                  Options Data
+                </Link>
+              </>
             ) : (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
-                title="Login required"
-              >
-                Options Data
-              </button>
+              <>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                  title="Login required"
+                >
+                  Volatility
+                </button>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                  title="Login required"
+                >
+                  Options Data
+                </button>
+              </>
             )}
             <UserMenu onOpenAuth={() => setShowAuthModal(true)} />
             <ExportMenu
@@ -864,6 +881,43 @@ export default function App() {
           <p className="mt-1">
             Uses Black-Scholes model for pricing and log-normal distribution for probability analysis.
           </p>
+          <div className="mt-4 pt-3 border-t border-gray-800">
+            <p className="text-gray-400">
+              Built by <span className="text-white font-medium">Mykolas Perevicius</span> in NYC
+            </p>
+            <div className="mt-2 flex justify-center gap-4 flex-wrap">
+              <a
+                href="mailto:perevicius.mykolas@gmail.com"
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Email
+              </a>
+              <a
+                href="https://linkedin.com/in/mykolasperevicius"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                LinkedIn
+              </a>
+              <a
+                href="https://perevici.us"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Website
+              </a>
+              <a
+                href="https://github.com/mykolas-perevicius"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                GitHub
+              </a>
+            </div>
+          </div>
         </footer>
       </main>
     </div>

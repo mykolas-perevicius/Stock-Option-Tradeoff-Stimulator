@@ -61,6 +61,29 @@ class IVResponse(BaseModel):
     timestamp: str
 
 
+class OptionContract(BaseModel):
+    contractSymbol: str
+    strike: float
+    lastPrice: Optional[float] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    change: Optional[float] = None
+    percentChange: Optional[float] = None
+    volume: Optional[int] = None
+    openInterest: Optional[int] = None
+    impliedVolatility: Optional[float] = None
+    inTheMoney: Optional[bool] = None
+
+
+class OptionsChainResponse(BaseModel):
+    symbol: str
+    expiry: str
+    expirations: list
+    underlyingPrice: float
+    calls: list
+    puts: list
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -234,6 +257,110 @@ async def get_history(symbol: str, period: str = "1mo", interval: str = "1d"):
             })
 
         return {"symbol": symbol.upper(), "data": data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/options/{symbol}/expirations")
+async def get_options_expirations(symbol: str):
+    """
+    Get available options expiration dates for a symbol
+    """
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        expirations = ticker.options
+
+        if not expirations:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No options available for symbol: {symbol}"
+            )
+
+        return {
+            "symbol": symbol.upper(),
+            "expirations": list(expirations)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/options/{symbol}", response_model=OptionsChainResponse)
+async def get_options_chain(symbol: str, expiry: str = None):
+    """
+    Get full options chain for a symbol.
+    If expiry is not provided, returns the nearest expiration.
+    """
+    import math
+
+    try:
+        ticker = yf.Ticker(symbol.upper())
+
+        # Get current price
+        info = ticker.info
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if not current_price:
+            raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
+
+        # Get available expirations
+        expirations = ticker.options
+        if not expirations:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No options available for symbol: {symbol}"
+            )
+
+        # Use provided expiry or default to nearest
+        selected_expiry = expiry if expiry and expiry in expirations else expirations[0]
+
+        # Get options chain
+        chain = ticker.option_chain(selected_expiry)
+
+        def process_options(df):
+            """Convert options dataframe to list of dicts with clean values"""
+            result = []
+            for _, row in df.iterrows():
+                # Get IV and convert to percentage if needed
+                iv = row.get('impliedVolatility', 0)
+                if iv and iv < 1:
+                    iv = iv * 100
+
+                # Handle NaN values
+                def clean_value(val):
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        return None
+                    return val
+
+                result.append({
+                    "contractSymbol": row.get('contractSymbol', ''),
+                    "strike": float(row.get('strike', 0)),
+                    "lastPrice": clean_value(row.get('lastPrice')),
+                    "bid": clean_value(row.get('bid')),
+                    "ask": clean_value(row.get('ask')),
+                    "change": clean_value(row.get('change')),
+                    "percentChange": clean_value(row.get('percentChange')),
+                    "volume": int(row.get('volume', 0)) if row.get('volume') and not math.isnan(row.get('volume')) else None,
+                    "openInterest": int(row.get('openInterest', 0)) if row.get('openInterest') and not math.isnan(row.get('openInterest')) else None,
+                    "impliedVolatility": round(iv, 2) if iv else None,
+                    "inTheMoney": bool(row.get('inTheMoney')) if 'inTheMoney' in row else None,
+                })
+            return result
+
+        calls = process_options(chain.calls)
+        puts = process_options(chain.puts)
+
+        return OptionsChainResponse(
+            symbol=symbol.upper(),
+            expiry=selected_expiry,
+            expirations=list(expirations),
+            underlyingPrice=current_price,
+            calls=calls,
+            puts=puts,
+        )
+
     except HTTPException:
         raise
     except Exception as e:

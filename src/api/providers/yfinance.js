@@ -245,4 +245,107 @@ export const yfinanceProvider = {
       throw error;
     }
   },
+
+  /**
+   * Fetch available options expiration dates
+   * @param {string} symbol - Stock symbol
+   * @returns {Promise<object>} Object with symbol and expirations array
+   */
+  async fetchOptionsExpirations(symbol) {
+    const upperSymbol = symbol.toUpperCase().trim();
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(
+        `${YFINANCE_BACKEND_URL}/options/${upperSymbol}/expirations`,
+        {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No options available for: ${upperSymbol}`);
+        }
+        throw new Error(`Options expirations HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeout);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Options expirations request timed out');
+      }
+
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch full options chain for a symbol
+   * @param {string} symbol - Stock symbol
+   * @param {string} expiry - Expiration date (optional, defaults to nearest)
+   * @returns {Promise<object>} Options chain with calls and puts
+   */
+  async fetchOptionsChain(symbol, expiry = null) {
+    const upperSymbol = symbol.toUpperCase().trim();
+
+    // Check cache
+    const cacheKey = `${upperSymbol}-options-${expiry || 'nearest'}`;
+    const cached = quoteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+
+    try {
+      let url = `${YFINANCE_BACKEND_URL}/options/${upperSymbol}`;
+      if (expiry) {
+        url += `?expiry=${encodeURIComponent(expiry)}`;
+      }
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No options data for: ${upperSymbol}`);
+        }
+        throw new Error(`Options chain HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      quoteCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      });
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeout);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Options chain request timed out');
+      }
+
+      throw error;
+    }
+  },
 };
