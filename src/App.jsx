@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 // Utils
 import { optionPrice, intrinsicValue, timeValue, breakevenPrice } from './utils/blackScholes';
@@ -33,8 +34,16 @@ import { loadGroqApiKey } from './api/groqApi';
 
 export default function App() {
   // Auth
-  const { apiKeys: authApiKeys, setApiKeys: setAuthApiKeys } = useAuth();
+  const { user, apiKeys: authApiKeys, setApiKeys: setAuthApiKeys } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const location = useLocation();
+
+  // Show auth modal if redirected from protected route
+  useEffect(() => {
+    if (location.state?.needsAuth && !user) {
+      setShowAuthModal(true);
+    }
+  }, [location.state, user]);
 
   // Main parameters
   const [currentPrice, setCurrentPrice] = useState(175);
@@ -362,6 +371,22 @@ export default function App() {
             <p className="text-gray-500 text-xs">Black-Scholes pricing • Log-normal distribution • Academic analysis</p>
           </div>
           <div className="flex items-center gap-3">
+            {user ? (
+              <Link
+                to="/options"
+                className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
+              >
+                Options Data
+              </Link>
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                title="Login required"
+              >
+                Options Data
+              </button>
+            )}
             <UserMenu onOpenAuth={() => setShowAuthModal(true)} />
             <ExportMenu
               chartRef={chartRef}
