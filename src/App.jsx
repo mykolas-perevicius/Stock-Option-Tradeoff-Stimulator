@@ -769,7 +769,7 @@ export default function App() {
             currentPrice={currentPrice}
             strikePrice={strikePrice}
             daysToExpiry={daysToExpiry}
-            impliedVol={marketIV}
+            impliedVol={userImpliedIV}
             riskFreeRate={riskFreeRate}
             investmentAmount={investmentAmount}
             isCall={isCall}
