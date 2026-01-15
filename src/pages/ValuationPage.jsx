@@ -33,6 +33,8 @@ export default function ValuationPage() {
   useEffect(() => {
     if (!symbol) return;
 
+    let isCancelled = false;
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
@@ -45,6 +47,8 @@ export default function ValuationPage() {
           yfinanceProvider.fetchHistory(symbol, '1y'),
         ]);
 
+        if (isCancelled) return;
+
         setFundamentals(fundData);
         setEarnings(earningsData);
         setHistoricalData(histData);
@@ -52,6 +56,8 @@ export default function ValuationPage() {
         // Try to get current IV from options
         try {
           const optionsData = await yfinanceProvider.fetchOptionsChain(symbol);
+          if (isCancelled) return;
+
           if (optionsData?.calls?.length) {
             // Get ATM options IV
             const price = optionsData.underlyingPrice || fundData.currentPrice;
@@ -68,14 +74,22 @@ export default function ValuationPage() {
         }
 
       } catch (err) {
-        setError(err.message || 'Failed to fetch valuation data');
-        console.error('Valuation fetch error:', err);
+        if (!isCancelled) {
+          setError(err.message || 'Failed to fetch valuation data');
+          console.error('Valuation fetch error:', err);
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [symbol]);
 
   // Handle symbol search/submit

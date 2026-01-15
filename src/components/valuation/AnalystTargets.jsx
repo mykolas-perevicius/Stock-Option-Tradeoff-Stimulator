@@ -34,13 +34,14 @@ export default function AnalystTargets({ fundamentals }) {
 
   // Calculate position of current price relative to targets
   const range = targetHigh - targetLow;
-  const currentPosition = ((currentPrice - targetLow) / range) * 100;
-  const meanPosition = targetMean ? ((targetMean - targetLow) / range) * 100 : 50;
+  // Avoid division by zero if high and low are the same
+  const currentPosition = range > 0 ? ((currentPrice - targetLow) / range) * 100 : 50;
+  const meanPosition = targetMean && range > 0 ? ((targetMean - targetLow) / range) * 100 : 50;
 
-  // Calculate implied moves
-  const upsideToMean = targetMean ? ((targetMean - currentPrice) / currentPrice * 100).toFixed(1) : null;
-  const upsideToHigh = ((targetHigh - currentPrice) / currentPrice * 100).toFixed(1);
-  const downsideToLow = ((targetLow - currentPrice) / currentPrice * 100).toFixed(1);
+  // Calculate implied moves (avoid division by zero)
+  const upsideToMean = targetMean && currentPrice > 0 ? ((targetMean - currentPrice) / currentPrice * 100).toFixed(1) : null;
+  const upsideToHigh = currentPrice > 0 ? ((targetHigh - currentPrice) / currentPrice * 100).toFixed(1) : '0.0';
+  const downsideToLow = currentPrice > 0 ? ((targetLow - currentPrice) / currentPrice * 100).toFixed(1) : '0.0';
 
   // Recommendation color
   const getRecColor = (rec) => {

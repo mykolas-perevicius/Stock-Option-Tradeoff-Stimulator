@@ -39,31 +39,40 @@ export default function FundamentalsPanel({ fundamentals }) {
     return num.toFixed(2);
   };
 
+  // Helper for safe color logic
+  const getColor = (value, redThreshold, greenThreshold, isHigherBetter = false) => {
+    if (value === null || value === undefined) return 'text-white';
+    if (isHigherBetter) {
+      return value > greenThreshold ? 'text-green-400' : value < redThreshold ? 'text-red-400' : 'text-white';
+    }
+    return value > redThreshold ? 'text-red-400' : value < greenThreshold ? 'text-green-400' : 'text-white';
+  };
+
   // Valuation metrics
   const valuationMetrics = [
     {
       label: 'P/E Ratio (TTM)',
       value: formatRatio(fundamentals.trailingPE),
       description: 'Price-to-earnings ratio',
-      color: fundamentals.trailingPE > 30 ? 'text-red-400' : fundamentals.trailingPE < 15 ? 'text-green-400' : 'text-white',
+      color: getColor(fundamentals.trailingPE, 30, 15),
     },
     {
       label: 'Forward P/E',
       value: formatRatio(fundamentals.forwardPE),
       description: 'Based on projected earnings',
-      color: fundamentals.forwardPE && fundamentals.forwardPE < fundamentals.trailingPE ? 'text-green-400' : 'text-white',
+      color: fundamentals.forwardPE && fundamentals.trailingPE && fundamentals.forwardPE < fundamentals.trailingPE ? 'text-green-400' : 'text-white',
     },
     {
       label: 'P/B Ratio',
       value: formatRatio(fundamentals.priceToBook),
       description: 'Price-to-book value',
-      color: fundamentals.priceToBook > 10 ? 'text-yellow-400' : 'text-white',
+      color: fundamentals.priceToBook && fundamentals.priceToBook > 10 ? 'text-yellow-400' : 'text-white',
     },
     {
       label: 'EV/EBITDA',
       value: formatRatio(fundamentals.enterpriseToEbitda),
       description: 'Enterprise value to EBITDA',
-      color: fundamentals.enterpriseToEbitda > 20 ? 'text-yellow-400' : 'text-white',
+      color: fundamentals.enterpriseToEbitda && fundamentals.enterpriseToEbitda > 20 ? 'text-yellow-400' : 'text-white',
     },
   ];
 
@@ -78,19 +87,19 @@ export default function FundamentalsPanel({ fundamentals }) {
       label: 'Forward EPS',
       value: fundamentals.forwardEps ? `$${fundamentals.forwardEps.toFixed(2)}` : 'N/A',
       description: 'Projected EPS',
-      color: fundamentals.forwardEps > fundamentals.trailingEps ? 'text-green-400' : 'text-white',
+      color: fundamentals.forwardEps && fundamentals.trailingEps && fundamentals.forwardEps > fundamentals.trailingEps ? 'text-green-400' : 'text-white',
     },
     {
       label: 'PEG Ratio',
       value: formatRatio(fundamentals.pegRatio),
       description: 'P/E to growth ratio',
-      color: fundamentals.pegRatio < 1 ? 'text-green-400' : fundamentals.pegRatio > 2 ? 'text-red-400' : 'text-white',
+      color: fundamentals.pegRatio != null ? (fundamentals.pegRatio < 1 ? 'text-green-400' : fundamentals.pegRatio > 2 ? 'text-red-400' : 'text-white') : 'text-white',
     },
     {
       label: 'EPS Growth',
       value: formatPercent(fundamentals.earningsGrowth),
       description: 'Year-over-year growth',
-      color: fundamentals.earningsGrowth > 0 ? 'text-green-400' : 'text-red-400',
+      color: fundamentals.earningsGrowth != null ? (fundamentals.earningsGrowth > 0 ? 'text-green-400' : 'text-red-400') : 'text-white',
     },
   ];
 
@@ -99,17 +108,17 @@ export default function FundamentalsPanel({ fundamentals }) {
     {
       label: 'Profit Margin',
       value: formatPercent(fundamentals.profitMargins),
-      color: fundamentals.profitMargins > 0.2 ? 'text-green-400' : 'text-white',
+      color: fundamentals.profitMargins != null && fundamentals.profitMargins > 0.2 ? 'text-green-400' : 'text-white',
     },
     {
       label: 'Operating Margin',
       value: formatPercent(fundamentals.operatingMargins),
-      color: fundamentals.operatingMargins > 0.15 ? 'text-green-400' : 'text-white',
+      color: fundamentals.operatingMargins != null && fundamentals.operatingMargins > 0.15 ? 'text-green-400' : 'text-white',
     },
     {
       label: 'ROE',
       value: formatPercent(fundamentals.returnOnEquity),
-      color: fundamentals.returnOnEquity > 0.15 ? 'text-green-400' : 'text-white',
+      color: fundamentals.returnOnEquity != null && fundamentals.returnOnEquity > 0.15 ? 'text-green-400' : 'text-white',
     },
     {
       label: 'ROA',
@@ -122,17 +131,17 @@ export default function FundamentalsPanel({ fundamentals }) {
     {
       label: 'Debt/Equity',
       value: formatRatio(fundamentals.debtToEquity),
-      color: fundamentals.debtToEquity > 2 ? 'text-red-400' : 'text-white',
+      color: fundamentals.debtToEquity != null && fundamentals.debtToEquity > 2 ? 'text-red-400' : 'text-white',
     },
     {
       label: 'Current Ratio',
       value: formatRatio(fundamentals.currentRatio),
-      color: fundamentals.currentRatio > 1.5 ? 'text-green-400' : fundamentals.currentRatio < 1 ? 'text-red-400' : 'text-white',
+      color: fundamentals.currentRatio != null ? (fundamentals.currentRatio > 1.5 ? 'text-green-400' : fundamentals.currentRatio < 1 ? 'text-red-400' : 'text-white') : 'text-white',
     },
     {
       label: 'Revenue Growth',
       value: formatPercent(fundamentals.revenueGrowth),
-      color: fundamentals.revenueGrowth > 0 ? 'text-green-400' : 'text-red-400',
+      color: fundamentals.revenueGrowth != null ? (fundamentals.revenueGrowth > 0 ? 'text-green-400' : 'text-red-400') : 'text-white',
     },
     {
       label: 'Market Cap',

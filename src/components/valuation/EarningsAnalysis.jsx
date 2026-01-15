@@ -56,8 +56,9 @@ export default function EarningsAnalysis({ earnings, historicalData, currentIV }
     return absSum / earningsMoves.length;
   }, [earningsMoves]);
 
-  // Calculate IV-implied move for comparison
-  const ivImpliedMove = currentIV ? currentIV * Math.sqrt(1 / 365) : null;
+  // Calculate IV-implied 30-day move for comparison
+  // Formula: IV% * sqrt(days/365) = expected move %
+  const ivImplied30DayMove = currentIV ? (currentIV / 100) * Math.sqrt(30 / 365) * 100 : null;
 
   // Format next earnings date
   const formatNextEarnings = (dateStr) => {
@@ -151,22 +152,22 @@ export default function EarningsAnalysis({ earnings, historicalData, currentIV }
               </div>
               <div className="text-xs text-gray-600">historical</div>
             </div>
-            {ivImpliedMove && (
+            {ivImplied30DayMove && (
               <div className="bg-gray-800 rounded-lg p-3 text-center">
                 <div className="text-xs text-gray-500 mb-1">IV Implied</div>
                 <div className="text-xl font-bold text-yellow-400">
-                  ±{(ivImpliedMove * Math.sqrt(30) * 100).toFixed(1)}%
+                  ±{ivImplied30DayMove.toFixed(1)}%
                 </div>
                 <div className="text-xs text-gray-600">30-day move</div>
               </div>
             )}
-            {avgMove && ivImpliedMove && (
+            {avgMove && ivImplied30DayMove && (
               <div className="bg-gray-800 rounded-lg p-3 text-center">
                 <div className="text-xs text-gray-500 mb-1">Options Pricing</div>
                 <div className={`text-lg font-bold ${
-                  (ivImpliedMove * Math.sqrt(30) * 100) > avgMove ? 'text-red-400' : 'text-green-400'
+                  ivImplied30DayMove > avgMove ? 'text-red-400' : 'text-green-400'
                 }`}>
-                  {(ivImpliedMove * Math.sqrt(30) * 100) > avgMove ? 'RICH' : 'CHEAP'}
+                  {ivImplied30DayMove > avgMove ? 'RICH' : 'CHEAP'}
                 </div>
                 <div className="text-xs text-gray-600">vs history</div>
               </div>
@@ -174,21 +175,21 @@ export default function EarningsAnalysis({ earnings, historicalData, currentIV }
           </div>
 
           {/* Interpretation */}
-          {avgMove && ivImpliedMove && (
+          {avgMove && ivImplied30DayMove && (
             <div className={`mt-4 p-3 rounded text-sm ${
-              (ivImpliedMove * Math.sqrt(30) * 100) > avgMove * 1.2
+              ivImplied30DayMove > avgMove * 1.2
                 ? 'bg-red-900/30 border border-red-500/30'
-                : (ivImpliedMove * Math.sqrt(30) * 100) < avgMove * 0.8
+                : ivImplied30DayMove < avgMove * 0.8
                   ? 'bg-green-900/30 border border-green-500/30'
                   : 'bg-gray-800/50'
             }`}>
-              {(ivImpliedMove * Math.sqrt(30) * 100) > avgMove * 1.2 ? (
+              {ivImplied30DayMove > avgMove * 1.2 ? (
                 <p>
                   <strong className="text-red-400">Options appear OVERPRICED:</strong>{' '}
                   Current IV implies a larger move than historical earnings suggest.
                   Consider selling premium into earnings.
                 </p>
-              ) : (ivImpliedMove * Math.sqrt(30) * 100) < avgMove * 0.8 ? (
+              ) : ivImplied30DayMove < avgMove * 0.8 ? (
                 <p>
                   <strong className="text-green-400">Options appear UNDERPRICED:</strong>{' '}
                   Historical earnings moves exceed what current IV implies.
