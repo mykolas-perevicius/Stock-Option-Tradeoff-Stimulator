@@ -360,6 +360,119 @@ export default function RiskRewardPanel({
         </div>
       </div>
 
+      {/* Advanced Risk-Adjusted Statistics */}
+      <div className="bg-gray-900 rounded-lg p-4">
+        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>📊</span> Risk-Adjusted Metrics
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Stock Metrics */}
+          <div className="bg-gray-800/50 rounded p-3">
+            <h4 className="text-sm font-medium text-green-400 mb-3">
+              {stockPosition === 'long' ? 'Long Stock' : 'Short Stock'}
+            </h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-500">Sharpe:</span>
+                <span className={`ml-1 font-medium ${stats.stockSharpe > 0.5 ? 'text-green-400' : stats.stockSharpe > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.stockSharpe?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Sortino:</span>
+                <span className={`ml-1 font-medium ${stats.stockSortino > 1 ? 'text-green-400' : stats.stockSortino > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.stockSortino === 999 ? '∞' : stats.stockSortino?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Kelly %:</span>
+                <span className={`ml-1 font-medium ${stats.stockKelly > 20 ? 'text-green-400' : stats.stockKelly > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.stockKelly}%
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Omega:</span>
+                <span className={`ml-1 font-medium ${stats.stockOmega > 1 ? 'text-green-400' : 'text-red-400'}`}>
+                  {stats.stockOmega === 999 ? '∞' : stats.stockOmega?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Risk/Reward:</span>
+                <span className={`ml-1 font-medium ${stats.stockRiskReward > 2 ? 'text-green-400' : stats.stockRiskReward > 1 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.stockRiskReward?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Calmar:</span>
+                <span className={`ml-1 font-medium ${stats.stockCalmar > 0.5 ? 'text-green-400' : stats.stockCalmar > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.stockCalmar?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Option Metrics */}
+          <div className="bg-gray-800/50 rounded p-3">
+            <h4 className="text-sm font-medium text-yellow-400 mb-3">
+              {optionPosition === 'long' ? 'Long' : 'Short'} {isCall ? 'Call' : 'Put'}
+            </h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-500">Sharpe:</span>
+                <span className={`ml-1 font-medium ${stats.optionSharpe > 0.5 ? 'text-green-400' : stats.optionSharpe > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.optionSharpe?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Sortino:</span>
+                <span className={`ml-1 font-medium ${stats.optionSortino > 1 ? 'text-green-400' : stats.optionSortino > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.optionSortino === 999 ? '∞' : stats.optionSortino?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Kelly %:</span>
+                <span className={`ml-1 font-medium ${stats.optionKelly > 20 ? 'text-green-400' : stats.optionKelly > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.optionKelly}%
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Omega:</span>
+                <span className={`ml-1 font-medium ${stats.optionOmega > 1 ? 'text-green-400' : 'text-red-400'}`}>
+                  {stats.optionOmega === 999 ? '∞' : stats.optionOmega?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Risk/Reward:</span>
+                <span className={`ml-1 font-medium ${stats.optionRiskReward > 2 ? 'text-green-400' : stats.optionRiskReward > 1 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.optionRiskReward?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Calmar:</span>
+                <span className={`ml-1 font-medium ${stats.optionCalmar > 0.5 ? 'text-green-400' : stats.optionCalmar > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {stats.optionCalmar?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Metric Explanations */}
+        <div className="mt-4 pt-3 border-t border-gray-700 text-xs text-gray-500">
+          <details className="cursor-pointer">
+            <summary className="font-medium text-gray-400 hover:text-gray-300">What do these metrics mean?</summary>
+            <div className="mt-2 space-y-1 pl-2">
+              <p><strong className="text-gray-400">Sharpe:</strong> Return per unit of risk (higher = better risk-adjusted return)</p>
+              <p><strong className="text-gray-400">Sortino:</strong> Like Sharpe but only penalizes downside risk (higher = better)</p>
+              <p><strong className="text-gray-400">Kelly %:</strong> Optimal position size as % of portfolio (0-100%, negative = don't trade)</p>
+              <p><strong className="text-gray-400">Omega:</strong> Ratio of gains to losses (greater than 1 = profitable on average)</p>
+              <p><strong className="text-gray-400">Risk/Reward:</strong> Average win / average loss (higher = better)</p>
+              <p><strong className="text-gray-400">Calmar:</strong> Return / max drawdown (higher = better recovery potential)</p>
+            </div>
+          </details>
+        </div>
+      </div>
+
       {/* Detailed Tradeoff Explanation */}
       <TradeoffExplanation
         stats={stats}

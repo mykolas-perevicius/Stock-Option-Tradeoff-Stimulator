@@ -164,10 +164,64 @@ export function calculateStats(chartData, params) {
     probOption50: Math.round(probOption50 * 10) / 10,
     probOption100: Math.round(probOption100 * 10) / 10,
 
-    // Risk-adjusted metrics
+    // Risk-adjusted metrics - Basic Sharpe (EV / VaR)
     stockSharpe: stockLossProb > 0 ? Math.round((stockEV / Math.abs(stockVaR95)) * 100) / 100 : 0,
     optionSharpe: optionLossProb > 0 ? Math.round((optionEV / Math.abs(optionVaR95)) * 100) / 100 : 0,
+
+    // Sortino Ratio (EV / Downside Deviation) - only considers negative returns
+    stockSortino: stockLossProb > 0 && stockLossSum < 0
+      ? Math.round((stockEV / Math.abs(stockLossSum / stockLossProb)) * 100) / 100
+      : stockEV > 0 ? 999 : 0, // Infinite if no downside
+    optionSortino: optionLossProb > 0 && optionLossSum < 0
+      ? Math.round((optionEV / Math.abs(optionLossSum / optionLossProb)) * 100) / 100
+      : optionEV > 0 ? 999 : 0,
+
+    // Kelly Criterion: f* = (p*b - q) / b where p=win prob, q=loss prob, b=win/loss ratio
+    // Tells optimal fraction of capital to risk
+    stockKelly: calculateKelly(stockWinProb, stockLossProb, stockWinSum, stockLossSum),
+    optionKelly: calculateKelly(optionProfitProb, optionLossProb, optionWinSum, optionLossSum),
+
+    // Omega Ratio: Sum of probability-weighted gains / Sum of probability-weighted losses
+    stockOmega: stockLossSum < 0 ? Math.round((stockWinSum / Math.abs(stockLossSum)) * 100) / 100 : 999,
+    optionOmega: optionLossSum < 0 ? Math.round((optionWinSum / Math.abs(optionLossSum)) * 100) / 100 : 999,
+
+    // Risk/Reward Ratio: Avg Win / Avg Loss (absolute)
+    stockRiskReward: stockLossProb > 0 && stockWinProb > 0 && stockLossSum < 0
+      ? Math.round(Math.abs((stockWinSum / stockWinProb) / (stockLossSum / stockLossProb)) * 100) / 100
+      : 0,
+    optionRiskReward: optionLossProb > 0 && optionProfitProb > 0 && optionLossSum < 0
+      ? Math.round(Math.abs((optionWinSum / optionProfitProb) / (optionLossSum / optionLossProb)) * 100) / 100
+      : 0,
+
+    // Calmar-like Ratio: EV / Max Loss (return vs worst case)
+    stockCalmar: stockMaxLoss !== null && stockMaxLoss < 0
+      ? Math.round((stockEV / Math.abs(stockMaxLoss)) * 100) / 100
+      : 0,
+    optionCalmar: optionMaxLoss !== null && optionMaxLoss < 0
+      ? Math.round((optionEV / Math.abs(optionMaxLoss)) * 100) / 100
+      : 0,
   };
+}
+
+/**
+ * Calculate Kelly Criterion for optimal position sizing
+ * f* = (p*b - q) / b
+ * p = probability of win, q = probability of loss, b = win/loss ratio
+ */
+function calculateKelly(winProb, lossProb, winSum, lossSum) {
+  if (lossProb <= 0 || winProb <= 0 || lossSum >= 0 || winSum <= 0) return 0;
+
+  const p = winProb;
+  const q = lossProb;
+  const avgWin = winSum / winProb;
+  const avgLoss = Math.abs(lossSum / lossProb);
+  const b = avgWin / avgLoss; // Win/loss ratio
+
+  const kelly = (p * b - q) / b;
+
+  // Kelly can be negative (don't bet) or very high (leverage)
+  // Clamp to reasonable range: -100% to +100%
+  return Math.round(Math.max(-1, Math.min(1, kelly)) * 100);
 }
 
 /**
