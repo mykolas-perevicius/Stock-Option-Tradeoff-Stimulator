@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App.jsx'
 import OptionsPage from './pages/OptionsPage.jsx'
 import VolatilityPage from './pages/VolatilityPage.jsx'
+import ValuationPage from './pages/ValuationPage.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { VolatilityPredictionProvider } from './contexts/VolatilityPredictionContext.jsx'
@@ -29,6 +30,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               element={
                 <ProtectedRoute>
                   <VolatilityPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/valuation"
+              element={
+                <ProtectedRoute>
+                  <ValuationPage />
                 </ProtectedRoute>
               }
             />

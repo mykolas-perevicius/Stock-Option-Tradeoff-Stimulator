@@ -569,6 +569,12 @@ export default function App() {
                 >
                   Options Data
                 </Link>
+                <Link
+                  to="/valuation"
+                  className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
+                >
+                  Valuation
+                </Link>
               </>
             ) : (
               <>
@@ -585,6 +591,13 @@ export default function App() {
                   title="Login required"
                 >
                   Options Data
+                </button>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
+                  title="Login required"
+                >
+                  Valuation
                 </button>
               </>
             )}

@@ -348,4 +348,119 @@ export const yfinanceProvider = {
       throw error;
     }
   },
+
+  /**
+   * Fetch fundamental financial metrics for a stock
+   * @param {string} symbol - Stock symbol
+   * @returns {Promise<object>} Fundamental data including P/E, EPS, margins, analyst targets
+   */
+  async fetchFundamentals(symbol) {
+    const upperSymbol = symbol.toUpperCase().trim();
+
+    // Check cache
+    const cacheKey = `${upperSymbol}-fundamentals`;
+    const cached = quoteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION * 5) {
+      // Cache fundamentals for 5 minutes
+      return cached.data;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(
+        `${YFINANCE_BACKEND_URL}/fundamentals/${upperSymbol}`,
+        {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No fundamental data for: ${upperSymbol}`);
+        }
+        throw new Error(`Fundamentals HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      quoteCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      });
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeout);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Fundamentals request timed out');
+      }
+
+      throw error;
+    }
+  },
+
+  /**
+   * Fetch earnings history and upcoming earnings for a stock
+   * @param {string} symbol - Stock symbol
+   * @returns {Promise<object>} Earnings data including history and next date
+   */
+  async fetchEarnings(symbol) {
+    const upperSymbol = symbol.toUpperCase().trim();
+
+    // Check cache
+    const cacheKey = `${upperSymbol}-earnings`;
+    const cached = quoteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION * 5) {
+      return cached.data;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(
+        `${YFINANCE_BACKEND_URL}/earnings/${upperSymbol}`,
+        {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No earnings data for: ${upperSymbol}`);
+        }
+        throw new Error(`Earnings HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      quoteCache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+      });
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeout);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Earnings request timed out');
+      }
+
+      throw error;
+    }
+  },
 };

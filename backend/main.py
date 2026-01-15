@@ -367,6 +367,225 @@ async def get_options_chain(symbol: str, expiry: str = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class FundamentalsResponse(BaseModel):
+    symbol: str
+    currentPrice: Optional[float] = None
+    # Valuation
+    trailingPE: Optional[float] = None
+    forwardPE: Optional[float] = None
+    priceToBook: Optional[float] = None
+    priceToSales: Optional[float] = None
+    enterpriseToEbitda: Optional[float] = None
+    enterpriseToRevenue: Optional[float] = None
+    marketCap: Optional[int] = None
+    enterpriseValue: Optional[int] = None
+    # Earnings
+    trailingEps: Optional[float] = None
+    forwardEps: Optional[float] = None
+    pegRatio: Optional[float] = None
+    # Profitability
+    profitMargins: Optional[float] = None
+    operatingMargins: Optional[float] = None
+    grossMargins: Optional[float] = None
+    returnOnEquity: Optional[float] = None
+    returnOnAssets: Optional[float] = None
+    # Financial health
+    debtToEquity: Optional[float] = None
+    currentRatio: Optional[float] = None
+    quickRatio: Optional[float] = None
+    # Analyst targets
+    targetLow: Optional[float] = None
+    targetMean: Optional[float] = None
+    targetMedian: Optional[float] = None
+    targetHigh: Optional[float] = None
+    numberOfAnalysts: Optional[int] = None
+    recommendationKey: Optional[str] = None
+    recommendationMean: Optional[float] = None
+    # Risk metrics
+    beta: Optional[float] = None
+    shortRatio: Optional[float] = None
+    shortPercentOfFloat: Optional[float] = None
+    heldPercentInsiders: Optional[float] = None
+    heldPercentInstitutions: Optional[float] = None
+    # Classification
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    # Dividends
+    dividendYield: Optional[float] = None
+    dividendRate: Optional[float] = None
+    payoutRatio: Optional[float] = None
+    exDividendDate: Optional[str] = None
+    # Growth
+    revenueGrowth: Optional[float] = None
+    earningsGrowth: Optional[float] = None
+    # 52 week metrics
+    fiftyTwoWeekHigh: Optional[float] = None
+    fiftyTwoWeekLow: Optional[float] = None
+    fiftyTwoWeekChange: Optional[float] = None
+
+
+@app.get("/fundamentals/{symbol}", response_model=FundamentalsResponse)
+async def get_fundamentals(symbol: str):
+    """
+    Get fundamental financial metrics for a stock.
+    Includes valuation, profitability, analyst targets, and risk metrics.
+    """
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        info = ticker.info
+
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if not current_price:
+            raise HTTPException(status_code=404, detail=f"No data found for symbol: {symbol}")
+
+        return FundamentalsResponse(
+            symbol=symbol.upper(),
+            currentPrice=current_price,
+            # Valuation
+            trailingPE=info.get("trailingPE"),
+            forwardPE=info.get("forwardPE"),
+            priceToBook=info.get("priceToBook"),
+            priceToSales=info.get("priceToSalesTrailingTwelveMonths"),
+            enterpriseToEbitda=info.get("enterpriseToEbitda"),
+            enterpriseToRevenue=info.get("enterpriseToRevenue"),
+            marketCap=info.get("marketCap"),
+            enterpriseValue=info.get("enterpriseValue"),
+            # Earnings
+            trailingEps=info.get("trailingEps"),
+            forwardEps=info.get("forwardEps"),
+            pegRatio=info.get("pegRatio"),
+            # Profitability
+            profitMargins=info.get("profitMargins"),
+            operatingMargins=info.get("operatingMargins"),
+            grossMargins=info.get("grossMargins"),
+            returnOnEquity=info.get("returnOnEquity"),
+            returnOnAssets=info.get("returnOnAssets"),
+            # Financial health
+            debtToEquity=info.get("debtToEquity"),
+            currentRatio=info.get("currentRatio"),
+            quickRatio=info.get("quickRatio"),
+            # Analyst targets
+            targetLow=info.get("targetLowPrice"),
+            targetMean=info.get("targetMeanPrice"),
+            targetMedian=info.get("targetMedianPrice"),
+            targetHigh=info.get("targetHighPrice"),
+            numberOfAnalysts=info.get("numberOfAnalystOpinions"),
+            recommendationKey=info.get("recommendationKey"),
+            recommendationMean=info.get("recommendationMean"),
+            # Risk metrics
+            beta=info.get("beta"),
+            shortRatio=info.get("shortRatio"),
+            shortPercentOfFloat=info.get("shortPercentOfFloat"),
+            heldPercentInsiders=info.get("heldPercentInsiders"),
+            heldPercentInstitutions=info.get("heldPercentInstitutions"),
+            # Classification
+            sector=info.get("sector"),
+            industry=info.get("industry"),
+            # Dividends
+            dividendYield=info.get("dividendYield"),
+            dividendRate=info.get("dividendRate"),
+            payoutRatio=info.get("payoutRatio"),
+            exDividendDate=str(info.get("exDividendDate")) if info.get("exDividendDate") else None,
+            # Growth
+            revenueGrowth=info.get("revenueGrowth"),
+            earningsGrowth=info.get("earningsGrowth"),
+            # 52 week
+            fiftyTwoWeekHigh=info.get("fiftyTwoWeekHigh"),
+            fiftyTwoWeekLow=info.get("fiftyTwoWeekLow"),
+            fiftyTwoWeekChange=info.get("52WeekChange"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class EarningsResponse(BaseModel):
+    symbol: str
+    nextEarningsDate: Optional[str] = None
+    earningsHistory: Optional[list] = None
+    quarterlyEarnings: Optional[list] = None
+    revenueEstimate: Optional[dict] = None
+    earningsEstimate: Optional[dict] = None
+
+
+@app.get("/earnings/{symbol}", response_model=EarningsResponse)
+async def get_earnings(symbol: str):
+    """
+    Get earnings history and upcoming earnings dates for a stock.
+    Includes historical earnings surprises and next earnings date.
+    """
+    import math
+    from datetime import datetime
+
+    try:
+        ticker = yf.Ticker(symbol.upper())
+
+        # Get earnings dates
+        earnings_dates = None
+        try:
+            ed = ticker.earnings_dates
+            if ed is not None and not ed.empty:
+                earnings_dates = []
+                for idx, row in ed.head(12).iterrows():  # Last 12 entries
+                    def safe_val(v):
+                        if v is None or (isinstance(v, float) and math.isnan(v)):
+                            return None
+                        return v
+
+                    earnings_dates.append({
+                        "date": idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                        "epsEstimate": safe_val(row.get("EPS Estimate")),
+                        "epsActual": safe_val(row.get("Reported EPS")),
+                        "surprise": safe_val(row.get("Surprise(%)")),
+                    })
+        except Exception:
+            pass
+
+        # Get next earnings date from calendar
+        next_earnings = None
+        try:
+            calendar = ticker.calendar
+            if calendar is not None:
+                if isinstance(calendar, dict):
+                    ed_val = calendar.get("Earnings Date")
+                    if ed_val:
+                        if isinstance(ed_val, list) and len(ed_val) > 0:
+                            next_earnings = str(ed_val[0])
+                        else:
+                            next_earnings = str(ed_val)
+        except Exception:
+            pass
+
+        # Get quarterly earnings
+        quarterly = None
+        try:
+            qe = ticker.quarterly_earnings
+            if qe is not None and not qe.empty:
+                quarterly = []
+                for idx, row in qe.iterrows():
+                    quarterly.append({
+                        "quarter": str(idx),
+                        "revenue": row.get("Revenue"),
+                        "earnings": row.get("Earnings"),
+                    })
+        except Exception:
+            pass
+
+        return EarningsResponse(
+            symbol=symbol.upper(),
+            nextEarningsDate=next_earnings,
+            earningsHistory=earnings_dates,
+            quarterlyEarnings=quarterly,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
