@@ -25,7 +25,9 @@ import VolatilityControls from './components/VolatilityControls';
 import APIProviderSelector from './components/APIProviderSelector';
 import UserMenu from './components/Auth/UserMenu';
 import AuthModal from './components/Auth/AuthModal';
+import SavedSetups from './components/SavedSetups';
 import { useAuth } from './contexts/AuthContext';
+import { saveLastState, getLastState, simulationToState } from './lib/supabase';
 
 // Data
 import { presets, getPresetById } from './data/presets';
@@ -261,6 +263,115 @@ export default function App() {
     }
   }, []);
 
+  // Load last saved state when user logs in
+  useEffect(() => {
+    if (!user) return;
+
+    const loadUserState = async () => {
+      try {
+        const lastState = await getLastState(user.id);
+        if (lastState) {
+          const state = simulationToState(lastState);
+          if (state) {
+            setSymbol(state.symbol);
+            setCurrentPrice(state.currentPrice);
+            setStrikePrice(state.strikePrice);
+            setDaysToExpiry(state.daysToExpiry);
+            setMarketIV(state.marketIV);
+            setRiskFreeRate(state.riskFreeRate);
+            setInvestmentAmount(state.investmentAmount);
+            setIsCall(state.isCall);
+            setUserExpectedMove(state.userExpectedMove);
+            if (state.axisSettings) {
+              setMinPrice(state.axisSettings.minPrice || minPrice);
+              setMaxPrice(state.axisSettings.maxPrice || maxPrice);
+              setMinPL(state.axisSettings.minPL || minPL);
+              setMaxPL(state.axisSettings.maxPL || maxPL);
+            }
+            console.log('Restored last session state');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load last state:', err);
+      }
+    };
+
+    loadUserState();
+  }, [user]);
+
+  // Auto-save state (debounced) when user is logged in
+  useEffect(() => {
+    if (!user) return;
+
+    const state = {
+      symbol,
+      currentPrice,
+      strikePrice,
+      daysToExpiry,
+      marketIV,
+      riskFreeRate,
+      investmentAmount,
+      isCall,
+      userExpectedMove,
+      axisSettings: { minPrice, maxPrice, minPL, maxPL },
+    };
+
+    // Debounce auto-save to avoid excessive writes
+    const timer = setTimeout(async () => {
+      try {
+        await saveLastState(user.id, state);
+      } catch (err) {
+        console.error('Auto-save failed:', err);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timer);
+  }, [
+    user, symbol, currentPrice, strikePrice, daysToExpiry,
+    marketIV, riskFreeRate, investmentAmount, isCall,
+    userExpectedMove, minPrice, maxPrice, minPL, maxPL
+  ]);
+
+  // Handler for loading saved setups
+  const handleLoadSetup = useCallback((state) => {
+    setSymbol(state.symbol);
+    setCurrentPrice(state.currentPrice);
+    setStrikePrice(state.strikePrice);
+    setDaysToExpiry(state.daysToExpiry);
+    setMarketIV(state.marketIV);
+    setRiskFreeRate(state.riskFreeRate);
+    setInvestmentAmount(state.investmentAmount);
+    setIsCall(state.isCall);
+    setUserExpectedMove(state.userExpectedMove);
+    if (state.axisSettings) {
+      setMinPrice(state.axisSettings.minPrice);
+      setMaxPrice(state.axisSettings.maxPrice);
+      setMinPL(state.axisSettings.minPL);
+      setMaxPL(state.axisSettings.maxPL);
+    }
+    setLastUpdated(null);
+    setQuoteStatus('manual');
+    console.log('Loaded saved setup');
+  }, []);
+
+  // Current state object for SavedSetups component
+  const currentState = useMemo(() => ({
+    symbol,
+    currentPrice,
+    strikePrice,
+    daysToExpiry,
+    marketIV,
+    riskFreeRate,
+    investmentAmount,
+    isCall,
+    userExpectedMove,
+    axisSettings: { minPrice, maxPrice, minPL, maxPL },
+  }), [
+    symbol, currentPrice, strikePrice, daysToExpiry,
+    marketIV, riskFreeRate, investmentAmount, isCall,
+    userExpectedMove, minPrice, maxPrice, minPL, maxPL
+  ]);
+
   // Load quote from API
   const handleLoadQuote = useCallback(async (sym) => {
     setIsLoading(true);
@@ -371,6 +482,9 @@ export default function App() {
             <p className="text-gray-500 text-xs">Black-Scholes pricing • Log-normal distribution • Academic analysis</p>
           </div>
           <div className="flex items-center gap-3">
+            {user && (
+              <SavedSetups currentState={currentState} onLoadSetup={handleLoadSetup} />
+            )}
             {user ? (
               <Link
                 to="/options"
