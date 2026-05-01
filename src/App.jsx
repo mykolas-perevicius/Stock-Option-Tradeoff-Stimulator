@@ -99,6 +99,18 @@ export default function App() {
   // Refs for export
   const chartRef = useRef(null);
 
+  // Latest-request guards. App.jsx fires async work in two places —
+  // handleLoadQuote (price + IV) and the history-fetching useEffect. Without
+  // these, clicking AAPL → TSLA → MSFT in quick succession could leave you
+  // with one symbol's price and another's IV / history.
+  const quoteReqIdRef = useRef(0);
+  const historyReqIdRef = useRef(0);
+
+  // Track whether the user has manually edited the axis range. Once they
+  // have, the auto-focus effect below stops overwriting their edits on
+  // every parameter tick (current bug: typing a strike resets the chart).
+  const userTouchedAxisRef = useRef(false);
+
   // Derived values
   const T = Math.max(0.001, daysToExpiry / 365);
   const r = riskFreeRate / 100;
@@ -259,22 +271,31 @@ export default function App() {
     };
   }, [currentPrice, T, r, sigma]);
 
-  // Update axis range when parameters change - default to focused view
+  // Auto-focus axis range to current/strike/breakeven on initial param load.
+  // After the user manually edits the chart range (or applies an axis
+  // preset), bail out so subsequent parameter tweaks don't keep overwriting
+  // their custom view.
   useEffect(() => {
-    // Focus on key prices: current, strike, and breakeven
+    if (userTouchedAxisRef.current) return;
     const keyPrices = [currentPrice, strikePrice, breakeven].filter(p => p > 0);
+    if (keyPrices.length === 0) return;
     const minKey = Math.min(...keyPrices);
     const maxKey = Math.max(...keyPrices);
     const priceRange = maxKey - minKey;
-    const padding = Math.max(priceRange * 0.2, currentPrice * 0.03); // 20% padding or min 3%
+    const padding = Math.max(priceRange * 0.2, currentPrice * 0.03);
 
     setMinPrice(Math.round((minKey - padding) * 100) / 100);
     setMaxPrice(Math.round((maxKey + padding) * 100) / 100);
-
-    // Tighter P&L range focused on realistic outcomes
-    setMinPL(Math.round(-totalPremiumPaid * 1.2)); // Slightly below max option loss
-    setMaxPL(Math.round(totalPremiumPaid * 1.5)); // Moderate upside
+    setMinPL(Math.round(-totalPremiumPaid * 1.2));
+    setMaxPL(Math.round(totalPremiumPaid * 1.5));
   }, [currentPrice, strikePrice, breakeven, totalPremiumPaid]);
+
+  // Wrappers around the axis setters that also flip the "user touched" flag,
+  // so a manual edit or preset choice freezes the auto-focus effect.
+  const handleManualMinPrice = useCallback((v) => { userTouchedAxisRef.current = true; setMinPrice(v); }, []);
+  const handleManualMaxPrice = useCallback((v) => { userTouchedAxisRef.current = true; setMaxPrice(v); }, []);
+  const handleManualMinPL = useCallback((v) => { userTouchedAxisRef.current = true; setMinPL(v); }, []);
+  const handleManualMaxPL = useCallback((v) => { userTouchedAxisRef.current = true; setMaxPL(v); }, []);
 
   // Load URL parameters and initialize on mount
   useEffect(() => {
@@ -290,33 +311,39 @@ export default function App() {
       setRiskFreeRate(urlParams.riskFreeRate);
       setInvestmentAmount(urlParams.investmentAmount);
       setIsCall(urlParams.isCall);
+      if (urlParams.symbol) setSymbol(urlParams.symbol);
+      if (urlParams.stockPosition) setStockPosition(urlParams.stockPosition);
+      if (urlParams.optionPosition) setOptionPosition(urlParams.optionPosition);
+      if (urlParams.userExpectedMove != null) setUserExpectedMove(urlParams.userExpectedMove);
     } else {
       // Load default quote on mount
       handleLoadQuote('AAPL');
     }
   }, []);
 
-  // Fetch historical data when symbol changes (for IV calculations)
+  // Fetch historical data when symbol changes (for IV calculations).
   useEffect(() => {
     if (!symbol) return;
+    const reqId = ++historyReqIdRef.current;
 
     const fetchHistoricalData = async () => {
       setIsLoadingHistory(true);
       setHistoryError(null);
 
       try {
-        // Fetch 1 year of historical data
         const history = await yfinanceProvider.fetchHistory(symbol, '1y');
+        if (reqId !== historyReqIdRef.current) return;
         setHistoricalData({
           closePrices: history.closePrices,
           ohlcData: history.ohlcData,
         });
       } catch (error) {
+        if (reqId !== historyReqIdRef.current) return;
         console.warn('Failed to fetch historical data:', error.message);
         setHistoryError(error.message);
         setHistoricalData({ closePrices: [], ohlcData: [] });
       } finally {
-        setIsLoadingHistory(false);
+        if (reqId === historyReqIdRef.current) setIsLoadingHistory(false);
       }
     };
 
@@ -353,10 +380,12 @@ export default function App() {
             setIsCall(state.isCall);
             setUserExpectedMove(state.userExpectedMove);
             if (state.axisSettings) {
-              setMinPrice(state.axisSettings.minPrice || minPrice);
-              setMaxPrice(state.axisSettings.maxPrice || maxPrice);
-              setMinPL(state.axisSettings.minPL || minPL);
-              setMaxPL(state.axisSettings.maxPL || maxPL);
+              const a = state.axisSettings;
+              if (Number.isFinite(a.minPrice)) setMinPrice(a.minPrice);
+              if (Number.isFinite(a.maxPrice)) setMaxPrice(a.maxPrice);
+              if (Number.isFinite(a.minPL)) setMinPL(a.minPL);
+              if (Number.isFinite(a.maxPL)) setMaxPL(a.maxPL);
+              userTouchedAxisRef.current = true;
             }
             console.log('Restored last session state');
           }
@@ -442,12 +471,15 @@ export default function App() {
     userExpectedMove, minPrice, maxPrice, minPL, maxPL
   ]);
 
-  // Load quote from API
+  // Load quote from API. Latest-request guard prevents an earlier slow IV
+  // fetch from overwriting state from a newer symbol click.
   const handleLoadQuote = useCallback(async (sym) => {
+    const reqId = ++quoteReqIdRef.current;
     setIsLoading(true);
     setQuoteStatus('loading');
     try {
       const quote = await fetchQuote(sym, { provider: selectedProvider, apiKeys });
+      if (reqId !== quoteReqIdRef.current) return;
       setCurrentPrice(Math.round(quote.price * 100) / 100);
       setSymbol(sym);
       setQuoteName(quote.name || '');
@@ -455,23 +487,22 @@ export default function App() {
       setQuoteChangePercent(quote.changePercent || 0);
       setQuoteStatus(quote.live ? 'live' : 'fallback');
 
-      // Set strike slightly OTM
       const roundedPrice = Math.round(quote.price);
       setStrikePrice(isCall ? roundedPrice + 5 : roundedPrice - 5);
 
-      // Fetch live IV from backend (falls back to estimate if unavailable)
       const ivData = await fetchIV(sym);
+      if (reqId !== quoteReqIdRef.current) return;
       setMarketIV(ivData.iv);
-      // Reset user expected move when loading new quote (use market's view)
       setUserExpectedMove(null);
       console.log(`IV for ${sym}: ${ivData.iv}% (source: ${ivData.source})`);
 
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (error) {
+      if (reqId !== quoteReqIdRef.current) return;
       console.error('Failed to load quote:', error);
       setQuoteStatus('error');
     } finally {
-      setIsLoading(false);
+      if (reqId === quoteReqIdRef.current) setIsLoading(false);
     }
   }, [isCall, selectedProvider, apiKeys]);
 
@@ -536,8 +567,12 @@ export default function App() {
       riskFreeRate,
       investmentAmount,
       isCall,
+      symbol,
+      stockPosition,
+      optionPosition,
+      userExpectedMove,
     });
-  }, [currentPrice, strikePrice, daysToExpiry, marketIV, riskFreeRate, investmentAmount, isCall]);
+  }, [currentPrice, strikePrice, daysToExpiry, marketIV, riskFreeRate, investmentAmount, isCall, symbol, stockPosition, optionPosition, userExpectedMove]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -682,10 +717,10 @@ export default function App() {
           minPL={minPL}
           maxPL={maxPL}
           investmentAmount={investmentAmount}
-          onMinPriceChange={setMinPrice}
-          onMaxPriceChange={setMaxPrice}
-          onMinPLChange={setMinPL}
-          onMaxPLChange={setMaxPL}
+          onMinPriceChange={handleManualMinPrice}
+          onMaxPriceChange={handleManualMaxPrice}
+          onMinPLChange={handleManualMinPL}
+          onMaxPLChange={handleManualMaxPL}
         />
 
         {/* Main Charts */}

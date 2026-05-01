@@ -170,38 +170,72 @@ export async function exportToPDF(reportData, filename = 'options-report.pdf') {
 }
 
 /**
- * Generate shareable URL with encoded parameters
+ * Generate shareable URL with encoded parameters.
+ *
+ * Skips fields that aren't finite (so a NaN currentPrice doesn't get
+ * URL-encoded as "s=NaN" and silently flatten the recipient's view to a
+ * default). Includes positions and userExpectedMove so a "short put with
+ * custom move" share doesn't lose those bits on the receiving end.
  */
 export function generateShareableURL(params) {
-  const urlParams = new URLSearchParams({
-    s: params.currentPrice,
-    k: params.strikePrice,
-    d: params.daysToExpiry,
-    iv: params.impliedVol,
-    r: params.riskFreeRate,
-    amt: params.investmentAmount,
-    type: params.isCall ? 'call' : 'put',
-  });
+  const out = new URLSearchParams();
+  const put = (k, v) => { if (Number.isFinite(v)) out.set(k, String(v)); };
 
-  return `${window.location.origin}${window.location.pathname}?${urlParams.toString()}`;
+  put('s', params.currentPrice);
+  put('k', params.strikePrice);
+  put('d', params.daysToExpiry);
+  put('iv', params.impliedVol);
+  put('r', params.riskFreeRate);
+  put('amt', params.investmentAmount);
+  out.set('type', params.isCall ? 'call' : 'put');
+  if (params.symbol) {
+    // Sanitize the symbol to a safe charset so we don't echo user-controlled
+    // text into the share URL or the eventual download filename.
+    const safeSymbol = String(params.symbol).toUpperCase().replace(/[^A-Z0-9.\-^]/g, '').slice(0, 12);
+    if (safeSymbol) out.set('sym', safeSymbol);
+  }
+  if (params.stockPosition === 'short') out.set('sp', 'short');
+  if (params.optionPosition === 'short') out.set('op', 'short');
+  if (Number.isFinite(params.userExpectedMove)) put('uem', params.userExpectedMove);
+  out.set('v', '2');
+
+  return `${window.location.origin}${window.location.pathname}?${out.toString()}`;
 }
 
 /**
- * Parse URL parameters to restore state
+ * Parse URL parameters to restore state.
+ *
+ * Each `pickFinite` call rejects non-finite values, including the literal
+ * string "NaN" that the previous version would happily Number-coerce and
+ * then `||`-fallback away — so corrupted shares come out as the explicit
+ * default, not silently overwritten with `100`.
  */
 export function parseURLParams() {
   const urlParams = new URLSearchParams(window.location.search);
-
   if (!urlParams.has('s')) return null;
 
+  const pickFinite = (key, fallback) => {
+    const n = Number(urlParams.get(key));
+    return Number.isFinite(n) ? n : fallback;
+  };
+
   return {
-    currentPrice: Number(urlParams.get('s')) || 100,
-    strikePrice: Number(urlParams.get('k')) || 105,
-    daysToExpiry: Number(urlParams.get('d')) || 30,
-    impliedVol: Number(urlParams.get('iv')) || 30,
-    riskFreeRate: Number(urlParams.get('r')) || 5,
-    investmentAmount: Number(urlParams.get('amt')) || 10000,
-    isCall: urlParams.get('type') !== 'put',
+    currentPrice: pickFinite('s', 100),
+    strikePrice: pickFinite('k', 105),
+    daysToExpiry: pickFinite('d', 30),
+    impliedVol: pickFinite('iv', 30),
+    riskFreeRate: pickFinite('r', 5),
+    investmentAmount: pickFinite('amt', 10000),
+    // Explicit "call"/"put" check so a missing/garbage value doesn't silently
+    // become "isCall=true" — the caller can then decide whether to keep its
+    // own default isCall instead.
+    isCall: urlParams.get('type') === 'call' ? true
+      : urlParams.get('type') === 'put' ? false
+      : true,
+    symbol: (urlParams.get('sym') || '').toUpperCase().replace(/[^A-Z0-9.\-^]/g, '').slice(0, 12) || null,
+    stockPosition: urlParams.get('sp') === 'short' ? 'short' : 'long',
+    optionPosition: urlParams.get('op') === 'short' ? 'short' : 'long',
+    userExpectedMove: urlParams.has('uem') ? pickFinite('uem', null) : null,
   };
 }
 

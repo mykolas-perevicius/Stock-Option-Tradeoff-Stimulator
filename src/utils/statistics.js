@@ -72,8 +72,10 @@ export function calculateStats(chartData, params) {
   const stockES95 = calculateExpectedShortfall(stockPLData, 0.95);
   const optionES95 = calculateExpectedShortfall(optionPLData, 0.95);
 
-  // Calculate return price targets
-  const breakeven = strikePrice + premium;
+  // Calculate return price targets. Breakeven differs by option type:
+  // call needs price ≥ K+premium; put needs price ≤ K-premium. Hard-coding
+  // the call form was making the put-side stats display the wrong target.
+  const breakeven = isCall ? strikePrice + premium : strikePrice - premium;
 
   const stockPrice50Return = priceForReturn(currentPrice, investmentAmount, 0.5, true);
   const stockPrice100Return = priceForReturn(currentPrice, investmentAmount, 1.0, true);
@@ -89,8 +91,12 @@ export function calculateStats(chartData, params) {
   const probOption50 = probAbove(optionPrice50Return, currentPrice, T, r, sigma) * 100;
   const probOption100 = probAbove(optionPrice100Return, currentPrice, T, r, sigma) * 100;
 
-  // Find crossover price
-  const crossoverPrice = findCrossoverPrice(currentPrice, strikePrice, premium, sharesOwned, optionShares);
+  // Find crossover price (only meaningful for long-call vs long-stock —
+  // helper returns null for puts and short positions).
+  const crossoverPrice = findCrossoverPrice(
+    currentPrice, strikePrice, premium, sharesOwned, optionShares,
+    isCall, stockPosition, optionPosition
+  );
 
   // Maximum losses - depend on position direction
   let stockMaxLoss, optionMaxLoss;

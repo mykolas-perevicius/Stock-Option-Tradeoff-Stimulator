@@ -200,20 +200,40 @@ export const deleteSimulation = async (userId, name) => {
 };
 
 /**
- * Convert database row to app state
+ * Convert database row to app state.
+ *
+ * `parseFloat(x) || default` was treating a legitimate `0` as falsy and
+ * snapping it to the default — so a saved riskFreeRate of 0% reloaded as
+ * 5%. Use Number.isFinite for the gate so zeros survive.
+ *
+ * Likewise `is_call !== false` quietly turned a NULL or undefined column
+ * into `true`. If a future migration drops or renames the column, every
+ * saved put would silently become a call. Treat null as null and let the
+ * caller decide rather than guessing.
  */
+const finite = (raw, fallback) => {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
+};
+const finiteInt = (raw, fallback) => {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export const simulationToState = (sim) => {
   if (!sim) return null;
   return {
     symbol: sim.symbol || '',
-    currentPrice: parseFloat(sim.current_price) || 175,
-    strikePrice: parseFloat(sim.strike_price) || 180,
-    daysToExpiry: parseInt(sim.days_to_expiry) || 30,
-    marketIV: parseFloat(sim.market_iv) || 28,
-    riskFreeRate: parseFloat(sim.risk_free_rate) || 5,
-    investmentAmount: parseFloat(sim.investment_amount) || 10000,
-    isCall: sim.is_call !== false,
-    userExpectedMove: sim.user_expected_move ? parseFloat(sim.user_expected_move) : null,
+    currentPrice: finite(sim.current_price, 175),
+    strikePrice: finite(sim.strike_price, 180),
+    daysToExpiry: finiteInt(sim.days_to_expiry, 30),
+    marketIV: finite(sim.market_iv, 28),
+    riskFreeRate: finite(sim.risk_free_rate, 5),
+    investmentAmount: finite(sim.investment_amount, 10000),
+    isCall: typeof sim.is_call === 'boolean' ? sim.is_call : true,
+    userExpectedMove: sim.user_expected_move != null
+      ? finite(sim.user_expected_move, null)
+      : null,
     axisSettings: sim.axis_settings || null,
   };
 };

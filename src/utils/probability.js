@@ -169,28 +169,33 @@ export function generatePriceRange(currentPrice, T, sigma, numSigma = 2) {
 }
 
 /**
- * Find crossover price where options outperform stock
+ * Find crossover price where a LONG CALL outperforms LONG STOCK.
+ *
+ * Only defined for the long-call vs long-stock comparison — for puts and
+ * for short positions the curves either don't intersect in the meaningful
+ * region or "outperform" needs a different definition. Returns null in
+ * those cases so the UI can hide the crossover row instead of displaying
+ * a misleading number.
  */
-export function findCrossoverPrice(currentPrice, strikePrice, premium, sharesOwned, optionShares) {
-  // Stock P&L = sharesOwned * (price - currentPrice)
-  // Option P&L = optionShares * max(0, price - strike) - totalPremium
-  // At crossover: stockPL = optionPL
-  // sharesOwned * (price - currentPrice) = optionShares * (price - strike) - totalPremium
-  // Solve for price where options just start to beat stock (above breakeven)
+export function findCrossoverPrice(
+  currentPrice, strikePrice, premium, sharesOwned, optionShares,
+  isCall = true, stockPosition = 'long', optionPosition = 'long'
+) {
+  if (!isCall || stockPosition !== 'long' || optionPosition !== 'long') {
+    return null;
+  }
 
   const totalPremium = premium * optionShares;
   const breakeven = strikePrice + premium;
 
-  // Above breakeven, both have positive slope but options have higher leverage
-  // Need to find where they intersect
-  // sharesOwned * price - sharesOwned * currentPrice = optionShares * price - optionShares * strike - totalPremium
-  // price * (sharesOwned - optionShares) = sharesOwned * currentPrice - optionShares * strike - totalPremium
-  // price = (sharesOwned * currentPrice - optionShares * strike - totalPremium) / (sharesOwned - optionShares)
-
+  // Above breakeven both legs have positive slope but the option has higher
+  // leverage. Solve sharesOwned·(P − S0) = optionShares·(P − K) − totalPremium.
   const numerator = sharesOwned * currentPrice - optionShares * strikePrice - totalPremium;
   const denominator = sharesOwned - optionShares;
 
-  if (denominator === 0) return null;
+  // Guard against tiny denominators producing absurd extrapolated prices
+  // (when sharesOwned ≈ optionShares the lines are nearly parallel).
+  if (Math.abs(denominator) < 1e-6) return null;
 
   const crossover = numerator / denominator;
   return crossover > breakeven ? crossover : null;

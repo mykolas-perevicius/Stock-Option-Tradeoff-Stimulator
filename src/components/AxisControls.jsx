@@ -1,5 +1,36 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { priceAtSigma } from '../utils/probability';
+
+// Small controlled number input that:
+//  - Lets the user type freely (including transient empty / "-").
+//  - Commits only finite numbers to the parent.
+//  - Reverts to the prop value on blur if left empty/invalid.
+function NumberField({ label, value, step, min, onCommit }) {
+  const [draft, setDraft] = useState(String(value ?? ''));
+  useEffect(() => { setDraft(String(value ?? '')); }, [value]);
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <input
+        type="number"
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onCommit(n);
+        }}
+        onBlur={(e) => {
+          const n = Number(e.target.value);
+          if (!Number.isFinite(n)) setDraft(String(value ?? ''));
+        }}
+        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
+        step={step}
+        min={min}
+      />
+    </div>
+  );
+}
 
 /**
  * Controls for adjusting chart axis bounds
@@ -102,48 +133,47 @@ export default function AxisControls({
 
       {/* Manual controls */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Min Price</label>
-          <input
-            type="number"
-            value={minPrice}
-            onChange={(e) => onMinPriceChange(Number(e.target.value))}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1"
-            min="0"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Max Price</label>
-          <input
-            type="number"
-            value={maxPrice}
-            onChange={(e) => onMaxPriceChange(Number(e.target.value))}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1"
-            min="0"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Min P&L</label>
-          <input
-            type="number"
-            value={minPL}
-            onChange={(e) => onMinPLChange(Number(e.target.value))}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="100"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Max P&L</label>
-          <input
-            type="number"
-            value={maxPL}
-            onChange={(e) => onMaxPLChange(Number(e.target.value))}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="100"
-          />
-        </div>
+        <NumberField
+          label="Min Price"
+          value={minPrice}
+          step={1}
+          min={0}
+          onCommit={(v) => {
+            // Keep min strictly < max; if user types a min above current max,
+            // clamp to maxPrice - 1 instead of letting the chart math go
+            // negative.
+            const safe = v < maxPrice ? v : Math.max(0, maxPrice - 1);
+            onMinPriceChange(safe);
+          }}
+        />
+        <NumberField
+          label="Max Price"
+          value={maxPrice}
+          step={1}
+          min={0}
+          onCommit={(v) => {
+            const safe = v > minPrice ? v : minPrice + 1;
+            onMaxPriceChange(safe);
+          }}
+        />
+        <NumberField
+          label="Min P&L"
+          value={minPL}
+          step={100}
+          onCommit={(v) => {
+            const safe = v < maxPL ? v : maxPL - 1;
+            onMinPLChange(safe);
+          }}
+        />
+        <NumberField
+          label="Max P&L"
+          value={maxPL}
+          step={100}
+          onCommit={(v) => {
+            const safe = v > minPL ? v : minPL + 1;
+            onMaxPLChange(safe);
+          }}
+        />
       </div>
 
       <p className="text-xs text-gray-500 mt-2">
