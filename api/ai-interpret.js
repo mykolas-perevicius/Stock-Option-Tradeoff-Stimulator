@@ -5,11 +5,12 @@
 
 export const config = { runtime: 'nodejs' };
 
-// Model selection. gemini-2.5-flash is the current free-tier general-purpose
-// recommendation per https://ai.google.dev/gemini-api/docs/models — gemini-1.5-flash
-// and 2.0-flash are deprecated. Override with GEMINI_MODEL if you need a newer
-// model later (e.g. gemini-3-flash-preview) without touching this file.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// Model selection. Defaulting to gemini-2.5-flash-lite: full gemini-2.5-flash
+// has only 5 RPM on the free tier which gets tripped instantly by even modest
+// traffic, while -lite has substantially higher free-tier RPM and is plenty
+// capable for short educational explanations. Override with GEMINI_MODEL env
+// var to switch to the full flash, a preview model, etc.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Naive in-memory rate limit per Vercel instance to stop runaway abuse.
@@ -58,9 +59,16 @@ export default async function handler(req, res) {
         contents: [{ parts: [{ text: `${systemPrompt}\n\n${prompt}` }] }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 600,
+          // Generous: gemini-2.5 family burns "thinking tokens" against this
+          // limit by default. We disable thinking below, but leave headroom
+          // for full multi-paragraph educational responses.
+          maxOutputTokens: 1024,
           topP: 0.95,
           topK: 40,
+          // Disable internal reasoning. Thinking tokens are fine for hard
+          // problems but pure overhead for "explain this option in plain
+          // English." Without this, short prompts return truncated text.
+          thinkingConfig: { thinkingBudget: 0 },
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
