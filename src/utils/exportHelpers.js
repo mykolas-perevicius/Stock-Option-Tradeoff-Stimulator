@@ -219,13 +219,20 @@ export function parseURLParams() {
     return Number.isFinite(n) ? n : fallback;
   };
 
+  // Clamp share-URL inputs to the same ranges the UI enforces. Without this,
+  // a hostile/malformed share like `?s=-100&iv=99999` would put the simulator
+  // into degenerate Black-Scholes states (negative price, ridiculous IV) that
+  // the NumberField clamping never gets a chance to fix.
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const pickClamped = (key, fallback, lo, hi) => clamp(pickFinite(key, fallback), lo, hi);
+
   return {
-    currentPrice: pickFinite('s', 100),
-    strikePrice: pickFinite('k', 105),
-    daysToExpiry: pickFinite('d', 30),
-    impliedVol: pickFinite('iv', 30),
-    riskFreeRate: pickFinite('r', 5),
-    investmentAmount: pickFinite('amt', 10000),
+    currentPrice: pickClamped('s', 100, 0.01, 1_000_000),
+    strikePrice: pickClamped('k', 105, 0.01, 1_000_000),
+    daysToExpiry: pickClamped('d', 30, 1, 3650),
+    impliedVol: pickClamped('iv', 30, 0.1, 500),
+    riskFreeRate: pickClamped('r', 5, -10, 25),
+    investmentAmount: pickClamped('amt', 10000, 1, 100_000_000),
     // Explicit "call"/"put" check so a missing/garbage value doesn't silently
     // become "isCall=true" — the caller can then decide whether to keep its
     // own default isCall instead.
@@ -235,7 +242,12 @@ export function parseURLParams() {
     symbol: (urlParams.get('sym') || '').toUpperCase().replace(/[^A-Z0-9.\-^]/g, '').slice(0, 12) || null,
     stockPosition: urlParams.get('sp') === 'short' ? 'short' : 'long',
     optionPosition: urlParams.get('op') === 'short' ? 'short' : 'long',
-    userExpectedMove: urlParams.has('uem') ? pickFinite('uem', null) : null,
+    userExpectedMove: urlParams.has('uem')
+      ? (() => {
+          const v = pickFinite('uem', null);
+          return v == null ? null : clamp(v, 0, 200);
+        })()
+      : null,
   };
 }
 
