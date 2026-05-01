@@ -70,23 +70,35 @@ export const fmpProvider = {
 
       const stockData = data[0];
 
+      const num = (v) => (Number.isFinite(v) ? v : null);
+      const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100);
+
+      const price = num(stockData.price);
+      if (price == null || price <= 0) {
+        throw new Error(`Invalid price for ${upperSymbol}`);
+      }
+
+      const ts = Number.isFinite(stockData.timestamp) && stockData.timestamp > 0
+        ? new Date(stockData.timestamp * 1000).toISOString()
+        : new Date().toISOString();
+
       const quote = {
-        symbol: stockData.symbol,
-        price: Math.round(stockData.price * 100) / 100,
-        previousClose: Math.round(stockData.previousClose * 100) / 100,
-        change: Math.round(stockData.change * 100) / 100,
-        changePercent: Math.round(stockData.changesPercentage * 100) / 100,
-        high: stockData.dayHigh,
-        low: stockData.dayLow,
-        open: stockData.open,
-        volume: stockData.volume,
-        marketCap: stockData.marketCap,
-        pe: stockData.pe,
-        eps: stockData.eps,
-        name: stockData.name,
-        exchange: stockData.exchange,
+        symbol: typeof stockData.symbol === 'string' ? stockData.symbol : upperSymbol,
+        price: round2(price),
+        previousClose: round2(num(stockData.previousClose)),
+        change: round2(num(stockData.change)),
+        changePercent: round2(num(stockData.changesPercentage)),
+        high: num(stockData.dayHigh),
+        low: num(stockData.dayLow),
+        open: num(stockData.open),
+        volume: num(stockData.volume),
+        marketCap: num(stockData.marketCap),
+        pe: num(stockData.pe),
+        eps: num(stockData.eps),
+        name: stockData.name || '',
+        exchange: stockData.exchange || '',
         currency: 'USD',
-        timestamp: new Date(stockData.timestamp * 1000).toISOString(),
+        timestamp: ts,
         source: 'fmp',
         live: true,
       };

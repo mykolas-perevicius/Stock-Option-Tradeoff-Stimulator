@@ -68,25 +68,33 @@ export const twelveDataProvider = {
         throw new Error(data.message || 'Twelve Data API error');
       }
 
-      if (!data.close) {
+      const num = (v) => {
+        if (v == null) return null;
+        const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100);
+
+      const price = num(data.close);
+      if (price == null || price <= 0) {
         throw new Error(`No data for symbol: ${upperSymbol}`);
       }
-
-      const price = parseFloat(data.close);
-      const prevClose = parseFloat(data.previous_close) || price;
+      const prevCloseRaw = num(data.previous_close);
+      const prevClose = prevCloseRaw != null && prevCloseRaw > 0 ? prevCloseRaw : price;
       const change = price - prevClose;
-      const changePercent = prevClose ? (change / prevClose) * 100 : 0;
+      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      const volRaw = parseInt(data.volume, 10);
 
       const quote = {
         symbol: upperSymbol,
-        price: Math.round(price * 100) / 100,
-        previousClose: Math.round(prevClose * 100) / 100,
-        change: Math.round(change * 100) / 100,
-        changePercent: Math.round(changePercent * 100) / 100,
-        high: parseFloat(data.high) || null,
-        low: parseFloat(data.low) || null,
-        open: parseFloat(data.open) || null,
-        volume: parseInt(data.volume) || null,
+        price: round2(price),
+        previousClose: round2(prevClose),
+        change: round2(change),
+        changePercent: round2(changePercent),
+        high: num(data.high),
+        low: num(data.low),
+        open: num(data.open),
+        volume: Number.isFinite(volRaw) ? volRaw : null,
         currency: data.currency || 'USD',
         exchange: data.exchange || '',
         name: data.name || '',

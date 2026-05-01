@@ -71,21 +71,37 @@ export const alphaVantageProvider = {
         throw new Error(`No data for symbol: ${upperSymbol}`);
       }
 
-      const price = parseFloat(globalQuote['05. price']);
-      const prevClose = parseFloat(globalQuote['08. previous close']);
-      const change = parseFloat(globalQuote['09. change']);
-      const changePercent = parseFloat(globalQuote['10. change percent']?.replace('%', ''));
+      const num = (v) => {
+        if (v == null) return null;
+        const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      const round2 = (n) => (n == null ? null : Math.round(n * 100) / 100);
+
+      const price = num(globalQuote['05. price']);
+      if (price == null || price <= 0) {
+        throw new Error(`Invalid price for ${upperSymbol}`);
+      }
+      const prevClose = num(globalQuote['08. previous close']);
+      const change = num(globalQuote['09. change']);
+      const changePercentRaw = globalQuote['10. change percent'];
+      const changePercent = num(
+        typeof changePercentRaw === 'string' ? changePercentRaw.replace('%', '') : changePercentRaw
+      );
 
       const quote = {
         symbol: upperSymbol,
-        price: Math.round(price * 100) / 100,
-        previousClose: Math.round(prevClose * 100) / 100,
-        change: Math.round(change * 100) / 100,
-        changePercent: Math.round(changePercent * 100) / 100,
-        high: parseFloat(globalQuote['03. high']) || null,
-        low: parseFloat(globalQuote['04. low']) || null,
-        open: parseFloat(globalQuote['02. open']) || null,
-        volume: parseInt(globalQuote['06. volume']) || null,
+        price: round2(price),
+        previousClose: round2(prevClose),
+        change: round2(change),
+        changePercent: round2(changePercent),
+        high: num(globalQuote['03. high']),
+        low: num(globalQuote['04. low']),
+        open: num(globalQuote['02. open']),
+        volume: (() => {
+          const v = parseInt(globalQuote['06. volume'], 10);
+          return Number.isFinite(v) ? v : null;
+        })(),
         currency: 'USD',
         timestamp: new Date().toISOString(),
         source: 'alphavantage',

@@ -133,10 +133,14 @@ export async function fetchIV(symbol) {
     }
 
     const data = await response.json();
+    const iv = Number.isFinite(data.iv) && data.iv > 0 ? data.iv : null;
+    if (iv === null) {
+      throw new Error('Backend returned invalid IV');
+    }
     return {
-      iv: data.iv,
+      iv,
       source: data.source,
-      atmStrike: data.atmStrike,
+      atmStrike: Number.isFinite(data.atmStrike) ? data.atmStrike : undefined,
       expirationDate: data.expirationDate,
       live: data.source === 'options_chain',
     };
