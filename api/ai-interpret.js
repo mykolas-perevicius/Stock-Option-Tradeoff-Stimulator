@@ -92,13 +92,28 @@ export default async function handler(req, res) {
 
     if (!r.ok) {
       const detail = await r.text().catch(() => '');
-      return res.status(r.status).json({ error: `Gemini ${r.status}`, detail: detail.slice(0, 500) });
+      // Strip API-key fragments that some upstream errors echo back.
+      const safeDetail = detail.replace(/key=[^&\s"']+/gi, 'key=REDACTED').slice(0, 500);
+      return res.status(r.status).json({ error: `Gemini ${r.status}`, detail: safeDetail });
     }
     const data = await r.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (data?.promptFeedback?.blockReason) {
+      return res.status(502).json({ error: `Gemini blocked: ${data.promptFeedback.blockReason}` });
+    }
+    const candidate = data?.candidates?.[0];
+    if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'RECITATION') {
+      return res.status(502).json({ error: `Gemini stopped: ${candidate.finishReason}` });
+    }
+    const text = candidate?.content?.parts?.[0]?.text;
     if (!text) return res.status(502).json({ error: 'Empty Gemini response' });
     return res.status(200).json({ text });
   } catch (err) {
-    return res.status(502).json({ error: err?.message || String(err) });
+    // Sanitize errors so we never echo the API key or stack frames to clients.
+    const raw = err?.message || String(err);
+    const safe = raw
+      .replace(/key=[^&\s"']+/gi, 'key=REDACTED')
+      .replace(/[A-Za-z0-9_\-]{30,}/g, '[redacted]')
+      .slice(0, 200);
+    return res.status(502).json({ error: safe });
   }
 }

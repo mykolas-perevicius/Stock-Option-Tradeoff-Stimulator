@@ -15,21 +15,53 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 let geminiApiKey = null;
 let groqApiKey = null;
 
+function sanitizeKey(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  // Reject the literal strings localStorage may have inherited from earlier
+  // versions that called setItem with non-string values.
+  if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null;
+  return trimmed;
+}
+
 // Load API keys from localStorage
 export function loadApiKeys() {
-  geminiApiKey = localStorage.getItem('gemini_api_key');
-  groqApiKey = localStorage.getItem('groq_api_key');
+  try {
+    geminiApiKey = sanitizeKey(localStorage.getItem('gemini_api_key'));
+    groqApiKey = sanitizeKey(localStorage.getItem('groq_api_key'));
+  } catch {
+    geminiApiKey = null;
+    groqApiKey = null;
+  }
 }
 
 // Save API keys
 export function saveGeminiApiKey(key) {
-  localStorage.setItem('gemini_api_key', key);
-  geminiApiKey = key;
+  const clean = sanitizeKey(key);
+  if (!clean) {
+    clearGeminiApiKey();
+    return;
+  }
+  try {
+    localStorage.setItem('gemini_api_key', clean);
+    geminiApiKey = clean;
+  } catch {
+    geminiApiKey = clean;
+  }
 }
 
 export function saveGroqApiKey(key) {
-  localStorage.setItem('groq_api_key', key);
-  groqApiKey = key;
+  const clean = sanitizeKey(key);
+  if (!clean) {
+    clearGroqApiKey();
+    return;
+  }
+  try {
+    localStorage.setItem('groq_api_key', clean);
+    groqApiKey = clean;
+  } catch {
+    groqApiKey = clean;
+  }
 }
 
 // Clear API keys
@@ -184,8 +216,19 @@ async function callGemini(prompt, systemPrompt) {
 
   const data = await response.json();
 
+  // Surface safety blocks distinctly from "no response" so the caller can show
+  // a meaningful message rather than silently falling through to the next
+  // provider.
+  if (data.promptFeedback?.blockReason) {
+    throw new Error(`Gemini blocked prompt: ${data.promptFeedback.blockReason}`);
+  }
+  const candidate = data.candidates?.[0];
+  if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'RECITATION') {
+    throw new Error(`Gemini stopped: ${candidate.finishReason}`);
+  }
+
   // Extract text from Gemini response
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = candidate?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error('No response from Gemini');
   }
@@ -230,7 +273,11 @@ async function callGroq(prompt, systemPrompt) {
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || '';
+  const text = data.choices?.[0]?.message?.content;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    throw new Error('Empty response from Groq');
+  }
+  return text;
 }
 
 /**
