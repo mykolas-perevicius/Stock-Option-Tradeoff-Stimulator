@@ -74,7 +74,12 @@ export default function GreeksPanel({
 
       <div className="space-y-4">
         {greekConfig.map((greek) => {
-          const barWidth = Math.min(100, (Math.abs(greek.value) / greek.max) * 100);
+          // greek.max can be 0 when premium is at the App.jsx floor (very deep
+          // OTM, sigma ≈ 0). Without this guard the bar width is NaN, which
+          // React passes through as the literal CSS string `width: NaN%`.
+          const barWidth = greek.max > 0
+            ? Math.min(100, (Math.abs(greek.value) / greek.max) * 100)
+            : 0;
 
           return (
             <div key={greek.name} className="group relative">

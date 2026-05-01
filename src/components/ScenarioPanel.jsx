@@ -110,7 +110,10 @@ export default function ScenarioPanel({
           <input
             type="number"
             value={whatIfPrice}
-            onChange={(e) => setWhatIfPrice(Number(e.target.value) || currentPrice)}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) setWhatIfPrice(n);
+            }}
             className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
             step="1"
           />
@@ -134,7 +137,10 @@ export default function ScenarioPanel({
           <input
             type="number"
             value={whatIfIV}
-            onChange={(e) => setWhatIfIV(Number(e.target.value) || impliedVol)}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n >= 0) setWhatIfIV(n);
+            }}
             className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
             step="5"
           />
@@ -158,7 +164,12 @@ export default function ScenarioPanel({
           <input
             type="number"
             value={whatIfDays}
-            onChange={(e) => setWhatIfDays(Math.max(1, Math.min(daysToExpiry, Number(e.target.value))))}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (Number.isFinite(n)) {
+                setWhatIfDays(Math.max(1, Math.min(daysToExpiry, n)));
+              }
+            }}
             className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
             step="1"
             min="1"
