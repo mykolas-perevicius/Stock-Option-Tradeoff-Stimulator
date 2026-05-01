@@ -25,17 +25,24 @@ export default function TradeoffExplanation({
   const impliedMovePercent = sigma * Math.sqrt(T) * 100;
   const userExpectedMove = expectedMove !== null ? expectedMove : impliedMovePercent;
 
-  // Leverage ratio
-  const leverageRatio = optionShares / sharesOwned;
+  // Leverage ratio. sharesOwned can be ~0 when investment is tiny relative
+  // to currentPrice; without this guard the ratio renders as "Infinityx".
+  const leverageRatio = sharesOwned > 0 ? optionShares / sharesOwned : 0;
 
   // Capital efficiency
   const capitalAtRiskStock = investmentAmount;
   const capitalAtRiskOption = totalPremiumPaid;
   const capitalFreed = investmentAmount - totalPremiumPaid;
-  const capitalEfficiency = (capitalFreed / investmentAmount) * 100;
+  const capitalEfficiency = investmentAmount > 0
+    ? (capitalFreed / investmentAmount) * 100
+    : 0;
 
-  // Determine recommendation based on expected vs implied move
-  const moveRatio = userExpectedMove / impliedMovePercent;
+  // Determine recommendation based on expected vs implied move. When IV → 0
+  // the implied move is 0 and the ratio is Infinity → falsely triggers the
+  // "options have edge" branch. Treat as "even" instead.
+  const moveRatio = impliedMovePercent > 0
+    ? userExpectedMove / impliedMovePercent
+    : 1;
 
   let recommendation;
   let recommendationColor;

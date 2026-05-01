@@ -133,16 +133,18 @@ export default function OptionsChainTable({
     , strikes[0]);
   }, [optionsData, underlyingPrice]);
 
-  // Summary stats
+  // Summary stats. Filter out illiquid rows (zero market price = never
+  // traded, missing bid/ask) so they don't poison the average diff with
+  // a 100%-underpriced reading against $0.
   const summary = useMemo(() => {
-    const allCalls = filteredOptions.calls;
-    const allPuts = filteredOptions.puts;
+    const liquidCalls = filteredOptions.calls.filter(c => c.marketPrice > 0);
+    const liquidPuts = filteredOptions.puts.filter(p => p.marketPrice > 0);
 
-    const avgCallDiff = allCalls.length > 0
-      ? allCalls.reduce((sum, c) => sum + c.priceDiff, 0) / allCalls.length
+    const avgCallDiff = liquidCalls.length > 0
+      ? liquidCalls.reduce((sum, c) => sum + c.priceDiff, 0) / liquidCalls.length
       : 0;
-    const avgPutDiff = allPuts.length > 0
-      ? allPuts.reduce((sum, p) => sum + p.priceDiff, 0) / allPuts.length
+    const avgPutDiff = liquidPuts.length > 0
+      ? liquidPuts.reduce((sum, p) => sum + p.priceDiff, 0) / liquidPuts.length
       : 0;
 
     return {
@@ -151,6 +153,22 @@ export default function OptionsChainTable({
       overallView: userIV > marketIV ? 'bullish_vol' : userIV < marketIV ? 'bearish_vol' : 'neutral',
     };
   }, [filteredOptions, userIV, marketIV]);
+
+  // Show 15 strikes centered on ATM rather than the lowest 15. With wide
+  // chains ($50–$500), the previous slice(0, 15) hid the entire ATM region
+  // when the user picked the "all" filter.
+  const sliceAroundAtm = (sorted, atm, n = 15) => {
+    if (sorted.length <= n) return sorted;
+    if (atm == null) return sorted.slice(0, n);
+    const idx = sorted.findIndex(o => o.strike >= atm);
+    if (idx < 0) return sorted.slice(-n);
+    const half = Math.floor(n / 2);
+    let start = Math.max(0, idx - half);
+    if (start + n > sorted.length) start = sorted.length - n;
+    return sorted.slice(start, start + n);
+  };
+  const visibleCalls = sliceAroundAtm(filteredOptions.calls, atmStrike);
+  const visiblePuts = sliceAroundAtm(filteredOptions.puts, atmStrike);
 
   const formatPrice = (price) => {
     if (price === null || price === undefined || isNaN(price)) return '-';
@@ -296,14 +314,14 @@ export default function OptionsChainTable({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOptions.calls.slice(0, 15).map((call) => (
+                  {visibleCalls.map((call) => (
                     <OptionRow key={call.strike} option={call} type="call" />
                   ))}
                 </tbody>
               </table>
-              {filteredOptions.calls.length > 15 && (
+              {filteredOptions.calls.length > visibleCalls.length && (
                 <div className="text-center py-2 text-gray-500 text-sm">
-                  +{filteredOptions.calls.length - 15} more strikes
+                  Showing {visibleCalls.length} of {filteredOptions.calls.length} strikes (centered on ATM)
                 </div>
               )}
             </div>
@@ -334,14 +352,14 @@ export default function OptionsChainTable({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOptions.puts.slice(0, 15).map((put) => (
+                  {visiblePuts.map((put) => (
                     <OptionRow key={put.strike} option={put} type="put" />
                   ))}
                 </tbody>
               </table>
-              {filteredOptions.puts.length > 15 && (
+              {filteredOptions.puts.length > visiblePuts.length && (
                 <div className="text-center py-2 text-gray-500 text-sm">
-                  +{filteredOptions.puts.length - 15} more strikes
+                  Showing {visiblePuts.length} of {filteredOptions.puts.length} strikes (centered on ATM)
                 </div>
               )}
             </div>

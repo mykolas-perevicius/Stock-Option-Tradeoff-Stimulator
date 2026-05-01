@@ -177,7 +177,10 @@ export default function ScenarioComparison({
               <input
                 type="number"
                 value={customStrike}
-                onChange={(e) => setCustomStrike(Number(e.target.value))}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n > 0) setCustomStrike(n);
+                }}
                 className="w-24 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm"
               />
             </div>

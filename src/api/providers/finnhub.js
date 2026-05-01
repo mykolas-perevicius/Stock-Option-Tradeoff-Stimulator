@@ -68,17 +68,24 @@ export const finnhubProvider = {
         throw new Error(`No data for symbol: ${upperSymbol}`);
       }
 
+      // Finnhub returns null for `dp` (percent change) on some symbols and 0
+      // for `t` if the symbol hasn't traded today. Round-on-null gives 0,
+      // which silently masks missing data.
+      const safeNum = (v) => (Number.isFinite(v) ? v : null);
+      const ts = Number.isFinite(data.t) && data.t > 0
+        ? new Date(data.t * 1000).toISOString()
+        : new Date().toISOString();
       const quote = {
         symbol: upperSymbol,
-        price: Math.round(data.c * 100) / 100, // Current price
-        previousClose: Math.round(data.pc * 100) / 100, // Previous close
-        change: Math.round(data.d * 100) / 100, // Change
-        changePercent: Math.round(data.dp * 100) / 100, // Change percent
-        high: data.h, // High of day
-        low: data.l, // Low of day
-        open: data.o, // Open price
+        price: Math.round(data.c * 100) / 100,
+        previousClose: safeNum(data.pc) != null ? Math.round(data.pc * 100) / 100 : null,
+        change: safeNum(data.d) != null ? Math.round(data.d * 100) / 100 : null,
+        changePercent: safeNum(data.dp) != null ? Math.round(data.dp * 100) / 100 : null,
+        high: safeNum(data.h),
+        low: safeNum(data.l),
+        open: safeNum(data.o),
         currency: 'USD',
-        timestamp: new Date(data.t * 1000).toISOString(),
+        timestamp: ts,
         source: 'finnhub',
         live: true,
       };

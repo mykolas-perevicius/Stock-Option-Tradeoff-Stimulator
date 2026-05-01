@@ -112,7 +112,15 @@ async function fetchFromYahoo(endpoint, symbol) {
 
     const meta = result.meta;
     const price = meta.regularMarketPrice || meta.previousClose;
-    const prevClose = meta.previousClose || price;
+    if (!Number.isFinite(price)) {
+      throw new Error(`No price data for ${symbol}`);
+    }
+    // Use price as fallback when previousClose is missing or zero (new IPO,
+    // halted symbol). Without this guard, change% becomes NaN/Infinity and
+    // poisons every component that displays it.
+    const prevClose = Number.isFinite(meta.previousClose) && meta.previousClose > 0
+      ? meta.previousClose
+      : price;
 
     return {
       symbol,

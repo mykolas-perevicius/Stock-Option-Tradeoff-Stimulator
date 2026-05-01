@@ -44,12 +44,24 @@ export default function SavedSetups({ currentState, onLoadSetup }) {
   };
 
   const handleSave = async () => {
-    if (!user || !newName.trim()) return;
+    if (!user) return;
+    const name = newName.trim();
+    if (!name) return;
+    // The auto-save key shadows whatever the user types; refuse so it doesn't
+    // get hidden behind the saved-setup filter and look like data loss.
+    if (name === '__last_state__') {
+      setError('That name is reserved. Try another.');
+      return;
+    }
+    if (name.length > 100) {
+      setError('Name too long (max 100 characters).');
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
-      await saveSimulation(user.id, newName.trim(), currentState);
+      await saveSimulation(user.id, name, currentState);
       await loadSetups();
       setShowSaveDialog(false);
       setNewName('');
