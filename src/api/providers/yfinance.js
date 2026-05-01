@@ -11,6 +11,52 @@ const YFINANCE_BACKEND_URL = import.meta.env.VITE_YFINANCE_BACKEND_URL || 'http:
 const quoteCache = new Map();
 const CACHE_DURATION = 60000; // 1 minute
 
+// Render free-tier services cold-start in 30-60s. We try a normal request first,
+// then on network/abort failure ping /health (which spins the dyno up), and retry
+// once with a longer timeout. Fire one warmup at module load too.
+const DEFAULT_TIMEOUT = 25000;
+const WARM_RETRY_TIMEOUT = 75000;
+let warmupPromise = null;
+
+function warmupBackend() {
+  if (warmupPromise) return warmupPromise;
+  warmupPromise = fetch(`${YFINANCE_BACKEND_URL}/health`, {
+    method: 'GET',
+    signal: AbortSignal.timeout(60000),
+  })
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      // Allow another warmup attempt after 5 minutes
+      setTimeout(() => { warmupPromise = null; }, 5 * 60 * 1000);
+    });
+  return warmupPromise;
+}
+
+// Best-effort warmup the moment any code imports this provider.
+if (typeof window !== 'undefined') {
+  warmupBackend();
+}
+
+async function fetchWithWarmup(url, { timeout = DEFAULT_TIMEOUT, ...init } = {}) {
+  const attempt = (ms) => fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(ms),
+    headers: { Accept: 'application/json', ...(init.headers || {}) },
+  });
+
+  try {
+    return await attempt(timeout);
+  } catch (err) {
+    const isNetwork = err?.name === 'AbortError' || err?.name === 'TimeoutError'
+      || /fetch|network|Failed to fetch/i.test(err?.message || '');
+    if (!isNetwork) throw err;
+    // Warm the backend, then retry once with a longer fuse.
+    await warmupBackend();
+    return attempt(WARM_RETRY_TIMEOUT);
+  }
+}
+
 export const yfinanceProvider = {
   id: 'yfinance',
   name: 'yfinance (Backend)',
@@ -31,21 +77,10 @@ export const yfinanceProvider = {
       return cached.data;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000); // yfinance can be slow
-
     try {
-      const response = await fetch(
-        `${YFINANCE_BACKEND_URL}/quote/${upperSymbol}`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
+      const response = await fetchWithWarmup(
+        `${YFINANCE_BACKEND_URL}/quote/${upperSymbol}`
       );
-
-      clearTimeout(timeout);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -94,13 +129,10 @@ export const yfinanceProvider = {
 
       return quote;
     } catch (error) {
-      clearTimeout(timeout);
-
-      // If backend is unavailable, provide helpful error
-      if (error.name === 'AbortError' || error.message.includes('fetch')) {
-        throw new Error('yfinance backend not available. Please ensure the backend server is running.');
+      if (error.name === 'AbortError' || error.name === 'TimeoutError'
+          || /fetch|Failed to fetch/i.test(error.message)) {
+        throw new Error('yfinance backend is starting up. Please retry in 30-60 seconds.');
       }
-
       throw error;
     }
   },
@@ -111,38 +143,19 @@ export const yfinanceProvider = {
    * @returns {Promise<array>} Matching symbols
    */
   async searchSymbols(query) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const response = await fetch(
-        `${YFINANCE_BACKEND_URL}/search?q=${encodeURIComponent(query)}`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
-      );
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        throw new Error(`yfinance search failed: HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      return (data.results || []).slice(0, 20).map(item => ({
-        symbol: item.symbol,
-        name: item.shortname || item.longname,
-        exchange: item.exchange,
-        type: item.quoteType,
-      }));
-    } catch (error) {
-      clearTimeout(timeout);
-      throw error;
+    const response = await fetchWithWarmup(
+      `${YFINANCE_BACKEND_URL}/search?q=${encodeURIComponent(query)}`
+    );
+    if (!response.ok) {
+      throw new Error(`yfinance search failed: HTTP ${response.status}`);
     }
+    const data = await response.json();
+    return (data.results || []).slice(0, 20).map(item => ({
+      symbol: item.symbol,
+      name: item.shortname || item.longname,
+      exchange: item.exchange,
+      type: item.quoteType,
+    }));
   },
 
   /**
@@ -178,21 +191,11 @@ export const yfinanceProvider = {
       return cached.data;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // History can be slow
-
     try {
-      const response = await fetch(
+      const response = await fetchWithWarmup(
         `${YFINANCE_BACKEND_URL}/history/${upperSymbol}?period=${period}&interval=1d`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
+        { timeout: 35000 }
       );
-
-      clearTimeout(timeout);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -236,12 +239,9 @@ export const yfinanceProvider = {
 
       return result;
     } catch (error) {
-      clearTimeout(timeout);
-
-      if (error.name === 'AbortError') {
-        throw new Error('History request timed out');
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        throw new Error('History request timed out (backend may be cold starting)');
       }
-
       throw error;
     }
   },
@@ -253,40 +253,16 @@ export const yfinanceProvider = {
    */
   async fetchOptionsExpirations(symbol) {
     const upperSymbol = symbol.toUpperCase().trim();
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const response = await fetch(
-        `${YFINANCE_BACKEND_URL}/options/${upperSymbol}/expirations`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
-      );
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`No options available for: ${upperSymbol}`);
-        }
-        throw new Error(`Options expirations HTTP ${response.status}`);
+    const response = await fetchWithWarmup(
+      `${YFINANCE_BACKEND_URL}/options/${upperSymbol}/expirations`
+    );
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`No options available for: ${upperSymbol}`);
       }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeout);
-
-      if (error.name === 'AbortError') {
-        throw new Error('Options expirations request timed out');
-      }
-
-      throw error;
+      throw new Error(`Options expirations HTTP ${response.status}`);
     }
+    return response.json();
   },
 
   /**
@@ -305,23 +281,11 @@ export const yfinanceProvider = {
       return cached.data;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    let url = `${YFINANCE_BACKEND_URL}/options/${upperSymbol}`;
+    if (expiry) url += `?expiry=${encodeURIComponent(expiry)}`;
 
     try {
-      let url = `${YFINANCE_BACKEND_URL}/options/${upperSymbol}`;
-      if (expiry) {
-        url += `?expiry=${encodeURIComponent(expiry)}`;
-      }
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      clearTimeout(timeout);
+      const response = await fetchWithWarmup(url, { timeout: 30000 });
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -331,20 +295,12 @@ export const yfinanceProvider = {
       }
 
       const data = await response.json();
-
-      quoteCache.set(cacheKey, {
-        data,
-        timestamp: Date.now(),
-      });
-
+      quoteCache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
     } catch (error) {
-      clearTimeout(timeout);
-
-      if (error.name === 'AbortError') {
-        throw new Error('Options chain request timed out');
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        throw new Error('Options chain request timed out (backend may be cold starting)');
       }
-
       throw error;
     }
   },
@@ -365,44 +321,23 @@ export const yfinanceProvider = {
       return cached.data;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
     try {
-      const response = await fetch(
-        `${YFINANCE_BACKEND_URL}/fundamentals/${upperSymbol}`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
+      const response = await fetchWithWarmup(
+        `${YFINANCE_BACKEND_URL}/fundamentals/${upperSymbol}`
       );
-
-      clearTimeout(timeout);
-
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error(`No fundamental data for: ${upperSymbol}`);
         }
         throw new Error(`Fundamentals HTTP ${response.status}`);
       }
-
       const data = await response.json();
-
-      quoteCache.set(cacheKey, {
-        data,
-        timestamp: Date.now(),
-      });
-
+      quoteCache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
     } catch (error) {
-      clearTimeout(timeout);
-
-      if (error.name === 'AbortError') {
-        throw new Error('Fundamentals request timed out');
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        throw new Error('Fundamentals request timed out (backend may be cold starting)');
       }
-
       throw error;
     }
   },
@@ -414,52 +349,29 @@ export const yfinanceProvider = {
    */
   async fetchEarnings(symbol) {
     const upperSymbol = symbol.toUpperCase().trim();
-
-    // Check cache
     const cacheKey = `${upperSymbol}-earnings`;
     const cached = quoteCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION * 5) {
       return cached.data;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
     try {
-      const response = await fetch(
-        `${YFINANCE_BACKEND_URL}/earnings/${upperSymbol}`,
-        {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
+      const response = await fetchWithWarmup(
+        `${YFINANCE_BACKEND_URL}/earnings/${upperSymbol}`
       );
-
-      clearTimeout(timeout);
-
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error(`No earnings data for: ${upperSymbol}`);
         }
         throw new Error(`Earnings HTTP ${response.status}`);
       }
-
       const data = await response.json();
-
-      quoteCache.set(cacheKey, {
-        data,
-        timestamp: Date.now(),
-      });
-
+      quoteCache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
     } catch (error) {
-      clearTimeout(timeout);
-
-      if (error.name === 'AbortError') {
-        throw new Error('Earnings request timed out');
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        throw new Error('Earnings request timed out (backend may be cold starting)');
       }
-
       throw error;
     }
   },

@@ -31,14 +31,6 @@ export const providerList = [
     badge: 'Free',
   },
   {
-    id: 'yahoo',
-    name: 'Yahoo Finance (Offline)',
-    requiresApiKey: false,
-    rateLimit: 'N/A',
-    description: 'CORS blocked - uses cached/estimated data only',
-    badge: 'Offline',
-  },
-  {
     id: 'finnhub',
     name: 'Finnhub',
     requiresApiKey: true,

@@ -71,29 +71,54 @@ Use markdown formatting for emphasis and structure.
 Do not give specific investment advice or recommendations.
 Always remind the reader this is educational content, not financial advice.`;
 
-  // Try Gemini first (free tier available)
+  // 1. Try the shared server-side proxy (free for all users, single shared key)
   try {
-    const result = await callGemini(prompt, systemPrompt);
+    const result = await callServerProxy(prompt, systemPrompt);
     return { text: result, provider: 'gemini' };
-  } catch (geminiError) {
-    console.warn('Gemini failed:', geminiError.message);
-
-    // Try Groq if user has API key
-    if (groqApiKey) {
-      try {
-        const result = await callGroq(prompt, systemPrompt);
-        return { text: result, provider: 'groq' };
-      } catch (groqError) {
-        console.warn('Groq failed:', groqError.message);
-      }
-    }
-
-    // Fall back to local interpretation
-    return {
-      text: getFallbackInterpretation(analysisData),
-      provider: 'local',
-    };
+  } catch (proxyError) {
+    console.warn('Server AI proxy failed:', proxyError.message);
   }
+
+  // 2. Try direct Gemini if the user added their own key
+  if (geminiApiKey) {
+    try {
+      const result = await callGemini(prompt, systemPrompt);
+      return { text: result, provider: 'gemini' };
+    } catch (geminiError) {
+      console.warn('Direct Gemini failed:', geminiError.message);
+    }
+  }
+
+  // 3. Try Groq if user added a key
+  if (groqApiKey) {
+    try {
+      const result = await callGroq(prompt, systemPrompt);
+      return { text: result, provider: 'groq' };
+    } catch (groqError) {
+      console.warn('Groq failed:', groqError.message);
+    }
+  }
+
+  // 4. Local rule-based fallback (always works)
+  return {
+    text: getFallbackInterpretation(analysisData),
+    provider: 'local',
+  };
+}
+
+async function callServerProxy(prompt, systemPrompt) {
+  const r = await fetch('/api/ai-interpret', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, systemPrompt }),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!r.ok) {
+    throw new Error(`Server AI proxy: ${r.status}`);
+  }
+  const data = await r.json();
+  if (!data?.text) throw new Error('Empty server proxy response');
+  return data.text;
 }
 
 /**

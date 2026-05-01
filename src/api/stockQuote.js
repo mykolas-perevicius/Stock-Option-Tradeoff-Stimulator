@@ -111,13 +111,22 @@ export function getEstimatedIV(symbol) {
  */
 export async function fetchIV(symbol) {
   const BACKEND_URL = import.meta.env.VITE_YFINANCE_BACKEND_URL || 'http://localhost:8000';
+  const url = `${BACKEND_URL}/iv/${symbol.toUpperCase()}`;
+  const tryFetch = (timeout) => fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(timeout),
+  });
 
   try {
-    const response = await fetch(`${BACKEND_URL}/iv/${symbol.toUpperCase()}`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(15000), // 15 second timeout
-    });
+    let response;
+    try {
+      response = await tryFetch(20000);
+    } catch (networkErr) {
+      // Cold-start retry
+      await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(60000) }).catch(() => {});
+      response = await tryFetch(60000);
+    }
 
     if (!response.ok) {
       throw new Error(`IV fetch failed: ${response.status}`);
@@ -133,7 +142,6 @@ export async function fetchIV(symbol) {
     };
   } catch (error) {
     console.warn(`Failed to fetch IV for ${symbol}:`, error.message);
-    // Return estimated IV as fallback
     return {
       iv: getEstimatedIV(symbol),
       source: 'estimated',

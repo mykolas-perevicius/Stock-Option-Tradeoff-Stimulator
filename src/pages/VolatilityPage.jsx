@@ -141,7 +141,9 @@ export default function VolatilityPage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">Welcome, {user?.email}</span>
+            {user?.email && (
+              <span className="text-sm text-gray-400">Welcome, {user.email}</span>
+            )}
             <Link
               to="/options"
               className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-600 rounded-lg transition-colors"

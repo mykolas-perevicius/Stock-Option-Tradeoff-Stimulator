@@ -555,52 +555,24 @@ export default function App() {
             {user && (
               <SavedSetups currentState={currentState} onLoadSetup={handleLoadSetup} />
             )}
-            {user ? (
-              <>
-                <Link
-                  to="/volatility"
-                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
-                >
-                  Volatility
-                </Link>
-                <Link
-                  to="/options"
-                  className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
-                >
-                  Options Data
-                </Link>
-                <Link
-                  to="/valuation"
-                  className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
-                >
-                  Valuation
-                </Link>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
-                  title="Login required"
-                >
-                  Volatility
-                </button>
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
-                  title="Login required"
-                >
-                  Options Data
-                </button>
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-gray-300"
-                  title="Login required"
-                >
-                  Valuation
-                </button>
-              </>
-            )}
+            <Link
+              to="/volatility"
+              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+            >
+              Volatility
+            </Link>
+            <Link
+              to="/options"
+              className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
+            >
+              Options Data
+            </Link>
+            <Link
+              to="/valuation"
+              className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
+            >
+              Valuation
+            </Link>
             <UserMenu onOpenAuth={() => setShowAuthModal(true)} />
             <ExportMenu
               chartRef={chartRef}

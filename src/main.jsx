@@ -5,9 +5,10 @@ import App from './App.jsx'
 import OptionsPage from './pages/OptionsPage.jsx'
 import VolatilityPage from './pages/VolatilityPage.jsx'
 import ValuationPage from './pages/ValuationPage.jsx'
-import ProtectedRoute from './components/ProtectedRoute.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { VolatilityPredictionProvider } from './contexts/VolatilityPredictionContext.jsx'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -17,32 +18,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<App />} />
-            <Route
-              path="/options"
-              element={
-                <ProtectedRoute>
-                  <OptionsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/volatility"
-              element={
-                <ProtectedRoute>
-                  <VolatilityPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/valuation"
-              element={
-                <ProtectedRoute>
-                  <ValuationPage />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/options" element={<OptionsPage />} />
+            <Route path="/volatility" element={<VolatilityPage />} />
+            <Route path="/valuation" element={<ValuationPage />} />
           </Routes>
         </BrowserRouter>
+        <Analytics />
+        <SpeedInsights />
       </VolatilityPredictionProvider>
     </AuthProvider>
   </React.StrictMode>,
