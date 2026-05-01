@@ -217,16 +217,15 @@ def _pick_target_expiration(expirations, target_dte: int = 30, min_dte: int = 7)
 
 
 def _normalize_dividend_yield(raw):
-    """yfinance has flip-flopped on this field across versions.
-    >=0.2.31 returns it in percent (0.44 = 0.44%); older versions returned
-    it as a decimal (0.0044 = 0.44%). Use the value, not the version: any
-    value > 1 is implausible as a decimal yield (would be >100% annual) so
-    treat it as percent and divide; otherwise it's already decimal.
-    Returns None for None/non-numeric/zero (zero-yield non-payers should not
-    render '0.00% dividend'; CorrelationFactors hides on falsy)."""
+    """yfinance >=0.2.31 returns dividendYield in PERCENT form (0.44 = 0.44%,
+    not 44%), unlike profitMargins / ROE which stay as decimals. Convert to
+    decimal so the frontend's blanket `×100` math works.
+
+    Returns None for None / non-numeric / zero (zero-yield non-payers
+    shouldn't render '0.00% dividend'; CorrelationFactors hides on falsy)."""
     if raw is None or not isinstance(raw, (int, float)) or raw <= 0:
         return None
-    return raw / 100 if raw > 1 else raw
+    return raw / 100
 
 
 def _format_ex_div(raw):
