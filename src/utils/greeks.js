@@ -12,6 +12,7 @@ import { normalCDF, normalPDF, calcD1, calcD2 } from './blackScholes';
  * @returns {number} Delta value (-1 to 1)
  */
 export function calcDelta(S, K, T, r, sigma, isCall = true) {
+  if (S <= 0 || K <= 0) return 0;
   if (T <= 0 || sigma <= 0) {
     // At expiration, delta is 1 if ITM, 0 if OTM
     if (isCall) return S > K ? 1 : 0;
@@ -28,7 +29,7 @@ export function calcDelta(S, K, T, r, sigma, isCall = true) {
  * @returns {number} Gamma value (always positive)
  */
 export function calcGamma(S, K, T, r, sigma) {
-  if (T <= 0 || sigma <= 0 || S <= 0) return 0;
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
 
   const d1 = calcD1(S, K, T, r, sigma);
   return normalPDF(d1) / (S * sigma * Math.sqrt(T));
@@ -40,7 +41,7 @@ export function calcGamma(S, K, T, r, sigma) {
  * @returns {number} Theta value (typically negative)
  */
 export function calcTheta(S, K, T, r, sigma, isCall = true) {
-  if (T <= 0 || sigma <= 0) return 0;
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
 
   const d1 = calcD1(S, K, T, r, sigma);
   const d2 = calcD2(S, K, T, r, sigma);
@@ -67,7 +68,7 @@ export function calcTheta(S, K, T, r, sigma, isCall = true) {
  * @returns {number} Vega value (always positive for long options)
  */
 export function calcVega(S, K, T, r, sigma) {
-  if (T <= 0 || sigma <= 0) return 0;
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
 
   const d1 = calcD1(S, K, T, r, sigma);
   // Vega per 1% IV change (divide by 100)
@@ -80,7 +81,7 @@ export function calcVega(S, K, T, r, sigma) {
  * @returns {number} Rho value
  */
 export function calcRho(S, K, T, r, sigma, isCall = true) {
-  if (T <= 0 || sigma <= 0) return 0;
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
 
   const d2 = calcD2(S, K, T, r, sigma);
 

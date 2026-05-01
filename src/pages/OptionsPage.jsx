@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useVolatilityPrediction } from '../contexts/VolatilityPredictionContext';
@@ -40,26 +40,32 @@ export default function OptionsPage() {
   // Active tab
   const [activeTab, setActiveTab] = useState('chain');
 
-  // Fetch options data when symbol changes
+  // Latest-request guard against stale-response races when the user types a
+  // new symbol or picks a new expiry before the previous fetches finish.
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     if (!symbol) return;
+    const reqId = ++requestIdRef.current;
 
     const fetchData = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        // Fetch options chain
         const chain = await yfinanceProvider.fetchOptionsChain(symbol, selectedExpiry);
+        if (reqId !== requestIdRef.current) return;
         setOptionsData(chain);
         setExpirations(chain.expirations || []);
         setCurrentPrice(chain.underlyingPrice);
 
         if (!selectedExpiry && chain.expirations?.length > 0) {
-          setSelectedExpiry(chain.expirations[0]);
+          // Backend already picks ~30 days out via _pick_target_expiration;
+          // mirror the choice from chain.expiry rather than [0] which is the
+          // 0-DTE weekly on Fridays.
+          setSelectedExpiry(chain.expiry || chain.expirations[0]);
         }
 
-        // Calculate days to expiry from selected expiration
         if (chain.expiry) {
           const expiryDate = new Date(chain.expiry);
           const today = new Date();
@@ -68,15 +74,16 @@ export default function OptionsPage() {
           setDaysToExpiry(Math.max(1, diffDays));
         }
 
-        // Fetch historical data for accuracy analysis
         const history = await yfinanceProvider.fetchHistory(symbol, '1y');
+        if (reqId !== requestIdRef.current) return;
         setHistoricalData(history);
 
       } catch (err) {
+        if (reqId !== requestIdRef.current) return;
         setError(err.message || 'Failed to fetch options data');
         console.error('Options fetch error:', err);
       } finally {
-        setLoading(false);
+        if (reqId === requestIdRef.current) setLoading(false);
       }
     };
 

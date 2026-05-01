@@ -30,10 +30,11 @@ export default function VolatilityChart({ data, marketIV }) {
     );
   }
 
-  // Calculate min/max for Y axis
+  // Calculate min/max for Y axis. Round bounds to whole percents so recharts'
+  // auto-generated ticks don't land on values like 5.300000000000001%.
   const volValues = data.map((d) => d.vol30).filter((v) => v > 0);
-  const minVol = Math.max(0, Math.min(...volValues) - 5);
-  const maxVol = Math.max(...volValues) + 5;
+  const minVol = Math.max(0, Math.floor(Math.min(...volValues) - 5));
+  const maxVol = Math.ceil(Math.max(...volValues) + 5);
 
   // Get current volatility (last point)
   const currentVol = data[data.length - 1]?.vol30;
@@ -106,7 +107,7 @@ export default function VolatilityChart({ data, marketIV }) {
               domain={[minVol, maxVol]}
               stroke="#6B7280"
               tick={{ fill: '#6B7280', fontSize: 11 }}
-              tickFormatter={(val) => `${val}%`}
+              tickFormatter={(val) => `${Number(val).toFixed(1)}%`}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />

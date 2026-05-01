@@ -66,9 +66,19 @@ export default function ExpectedMoveCalculator({
           <span>3 months</span>
           <span>1 year</span>
         </div>
-        {/* Quick select buttons */}
+        {/* Quick select buttons. Labels avoid rounding collisions (e.g. 45 and
+            60 both rounded to "2mo" before). */}
         <div className="flex gap-2 mt-3">
-          {[7, 14, 30, 45, 60, 90, 180, 365].map((days) => (
+          {[
+            { days: 7, label: '1w' },
+            { days: 14, label: '2w' },
+            { days: 30, label: '1mo' },
+            { days: 45, label: '45d' },
+            { days: 60, label: '2mo' },
+            { days: 90, label: '3mo' },
+            { days: 180, label: '6mo' },
+            { days: 365, label: '1yr' },
+          ].map(({ days, label }) => (
             <button
               key={days}
               onClick={() => onDaysChange(days)}
@@ -78,7 +88,7 @@ export default function ExpectedMoveCalculator({
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
             >
-              {days < 7 ? `${days}d` : days < 30 ? `${days / 7}w` : days < 365 ? `${Math.round(days / 30)}mo` : '1yr'}
+              {label}
             </button>
           ))}
         </div>

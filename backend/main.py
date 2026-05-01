@@ -128,11 +128,47 @@ async def get_quote(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _pick_target_expiration(expirations, target_dte: int = 30, min_dte: int = 7):
+    """
+    Pick a sensible expiration from yfinance's list.
+
+    yfinance returns expirations[0] = next available, which on Fridays is the
+    SAME-DAY 0-DTE weekly. ATM IV on a 0-DTE option mathematically collapses
+    toward zero (the option has no time value left), producing nonsense IV
+    readings like "AAPL IV 2.0%". To avoid this:
+    - Skip anything < min_dte days out (default 7).
+    - Pick the expiration nearest to target_dte (default 30 — typical analyst
+      horizon and what most option calculators imply by "the IV").
+    """
+    from datetime import date
+
+    today = date.today()
+    candidates = []
+    for exp_str in expirations:
+        try:
+            exp_date = date.fromisoformat(exp_str)
+        except Exception:
+            continue
+        dte = (exp_date - today).days
+        if dte >= min_dte:
+            candidates.append((exp_str, dte))
+
+    if not candidates:
+        # All expirations are too short-dated; fall back to the longest
+        # available rather than the same-day one.
+        return expirations[-1] if expirations else None
+
+    candidates.sort(key=lambda x: abs(x[1] - target_dte))
+    return candidates[0][0]
+
+
 @app.get("/iv/{symbol}", response_model=IVResponse)
-async def get_implied_volatility(symbol: str):
+async def get_implied_volatility(symbol: str, dte: int = 30):
     """
     Get implied volatility for a stock from its options chain.
-    Returns the IV of the ATM (at-the-money) option for the nearest expiration.
+    Returns the IV of the ATM (at-the-money) option for an expiration ~`dte`
+    days out (default 30). Skips 0-DTE / same-week expirations whose IV is
+    artificially low.
     """
     from datetime import datetime
 
@@ -158,32 +194,46 @@ async def get_implied_volatility(symbol: str):
                 timestamp=datetime.now().isoformat()
             )
 
-        # Get the nearest expiration (first one)
-        nearest_exp = expirations[0]
+        target_exp = _pick_target_expiration(expirations, target_dte=dte, min_dte=7)
+        if target_exp is None:
+            raise HTTPException(status_code=404, detail=f"No usable expirations for {symbol}")
 
-        # Get options chain for nearest expiration
-        chain = ticker.option_chain(nearest_exp)
+        chain = ticker.option_chain(target_exp)
         calls = chain.calls
 
         if calls.empty:
             raise HTTPException(status_code=404, detail=f"No options data for symbol: {symbol}")
 
         # Find ATM strike (closest to current price)
+        calls = calls.copy()
         calls['distance'] = abs(calls['strike'] - current_price)
         atm_row = calls.loc[calls['distance'].idxmin()]
 
-        # Get implied volatility (yfinance returns it as decimal, e.g., 0.25 for 25%)
         iv = atm_row.get('impliedVolatility', 0.30)
-
-        # Convert to percentage if needed
-        if iv < 1:
+        # yfinance gives IV as a decimal (0.25 = 25%); convert to percent.
+        if iv and iv < 1:
             iv = iv * 100
+
+        # Sanity floor: ATM IV under 5% on an equity is almost certainly bad
+        # data (e.g. yfinance returning a zero-volume contract). Fall through
+        # to a beta-based estimate rather than confusing the user.
+        if not iv or iv < 5:
+            beta = info.get("beta", 1.0) or 1.0
+            estimated_iv = 20 + (beta - 1) * 15
+            return IVResponse(
+                symbol=symbol.upper(),
+                iv=round(max(15, min(80, estimated_iv)), 1),
+                atmStrike=float(atm_row['strike']),
+                expirationDate=target_exp,
+                source="estimated_from_beta",
+                timestamp=datetime.now().isoformat()
+            )
 
         return IVResponse(
             symbol=symbol.upper(),
             iv=round(iv, 1),
             atmStrike=float(atm_row['strike']),
-            expirationDate=nearest_exp,
+            expirationDate=target_exp,
             source="options_chain",
             timestamp=datetime.now().isoformat()
         )
@@ -191,11 +241,10 @@ async def get_implied_volatility(symbol: str):
     except HTTPException:
         raise
     except Exception as e:
-        # Fallback to estimated IV
         from datetime import datetime
         return IVResponse(
             symbol=symbol.upper(),
-            iv=30.0,  # Default fallback
+            iv=30.0,
             source="fallback",
             timestamp=datetime.now().isoformat()
         )
@@ -313,8 +362,13 @@ async def get_options_chain(symbol: str, expiry: str = None):
                 detail=f"No options available for symbol: {symbol}"
             )
 
-        # Use provided expiry or default to nearest
-        selected_expiry = expiry if expiry and expiry in expirations else expirations[0]
+        # Use provided expiry or default to a ~30-day expiration (skipping 0-DTE
+        # weeklies whose IV / pricing is artificially distorted).
+        if expiry and expiry in expirations:
+            selected_expiry = expiry
+        else:
+            selected_expiry = _pick_target_expiration(expirations, target_dte=30, min_dte=7) \
+                or expirations[0]
 
         # Get options chain
         chain = ticker.option_chain(selected_expiry)
@@ -481,8 +535,12 @@ async def get_fundamentals(symbol: str):
             # Classification
             sector=info.get("sector"),
             industry=info.get("industry"),
-            # Dividends
-            dividendYield=info.get("dividendYield"),
+            # Dividends. yfinance >=0.2.31 returns dividendYield in PERCENT
+            # form (0.44 means 0.44%, not 44%), unlike profitMargins / ROE /
+            # etc. which stay as decimals. The frontend assumes decimal and
+            # multiplies by 100, which produced "AAPL dividend yield: 38%"
+            # (real value ~0.4%). Normalize to decimal here.
+            dividendYield=(info.get("dividendYield") / 100) if isinstance(info.get("dividendYield"), (int, float)) else info.get("dividendYield"),
             dividendRate=info.get("dividendRate"),
             payoutRatio=info.get("payoutRatio"),
             exDividendDate=str(info.get("exDividendDate")) if info.get("exDividendDate") else None,

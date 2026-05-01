@@ -37,7 +37,7 @@ export function normalPDF(x) {
  * @param {number} sigma - Volatility (decimal)
  */
 export function calcD1(S, K, T, r, sigma) {
-  if (T <= 0 || sigma <= 0) return 0;
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) return 0;
   return (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
 }
 
@@ -58,6 +58,7 @@ export function calcD2(S, K, T, r, sigma) {
  * @returns {number} Call option price
  */
 export function blackScholesCall(S, K, T, r, sigma) {
+  if (S <= 0 || K <= 0) return 0;
   if (T <= 0) return Math.max(0, S - K);
   if (sigma <= 0) return Math.max(0, S - K);
 
@@ -77,6 +78,7 @@ export function blackScholesCall(S, K, T, r, sigma) {
  * @returns {number} Put option price
  */
 export function blackScholesPut(S, K, T, r, sigma) {
+  if (S <= 0 || K <= 0) return 0;
   if (T <= 0) return Math.max(0, K - S);
   if (sigma <= 0) return Math.max(0, K - S);
 

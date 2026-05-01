@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchQuote, fetchIV } from '../api/stockQuote';
@@ -45,16 +45,22 @@ export default function VolatilityPage() {
   // Popular symbols for quick selection
   const popularSymbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'SPY', 'QQQ', 'AMD'];
 
-  // Load data for a symbol
+  // Latest-request guard: rapidly clicking different symbols (or changing
+  // period mid-fetch) used to let an earlier request finish AFTER a later one
+  // and overwrite its state, leaving the UI showing one symbol's name with
+  // another symbol's data.
+  const requestIdRef = useRef(0);
+
   const handleLoadData = useCallback(async (sym) => {
     if (!sym) return;
+    const reqId = ++requestIdRef.current;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Fetch current quote
       const quote = await fetchQuote(sym, { provider: 'yfinance' });
+      if (reqId !== requestIdRef.current) return;
       setStockData({
         symbol: sym.toUpperCase(),
         name: quote.name || sym.toUpperCase(),
@@ -64,26 +70,27 @@ export default function VolatilityPage() {
       });
       setSymbol(sym.toUpperCase());
 
-      // Fetch IV from options chain
       const ivData = await fetchIV(sym);
+      if (reqId !== requestIdRef.current) return;
       setMarketIV(ivData.iv);
 
-      // Fetch historical data
       const history = await yfinanceProvider.fetchHistory(sym, selectedPeriod);
+      if (reqId !== requestIdRef.current) return;
       setHistoricalData(history);
 
-      // Calculate all volatilities
       const vols = getAllVolatilities({
         marketIV: ivData.iv,
         closePrices: history.closePrices,
         ohlcData: history.ohlcData,
       });
+      if (reqId !== requestIdRef.current) return;
       setAllVolatilities(vols);
     } catch (err) {
+      if (reqId !== requestIdRef.current) return;
       console.error('Failed to load data:', err);
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      if (reqId === requestIdRef.current) setIsLoading(false);
     }
   }, [selectedPeriod]);
 

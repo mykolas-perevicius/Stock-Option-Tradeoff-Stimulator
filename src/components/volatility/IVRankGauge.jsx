@@ -4,7 +4,10 @@ import React, { useMemo } from 'react';
  * IVRankGauge - Visual display of IV rank and percentile
  */
 export default function IVRankGauge({ currentIV, historicalIVs }) {
-  // Calculate IV Rank: (Current - Min) / (Max - Min) * 100
+  // Calculate IV Rank: (Current - Min) / (Max - Min) * 100, clamped to [0, 100]
+  // Out-of-range readings (current IV below 52w low or above 52w high) are
+  // valid signals — clamping for display while preserving the raw value lets
+  // us show "0%" / "100%" without negative-percent UI weirdness.
   const ivRank = useMemo(() => {
     if (!historicalIVs || historicalIVs.length === 0 || !currentIV) return null;
     const validIVs = historicalIVs.filter((iv) => iv > 0);
@@ -14,7 +17,8 @@ export default function IVRankGauge({ currentIV, historicalIVs }) {
     const max = Math.max(...validIVs);
 
     if (max === min) return 50;
-    return ((currentIV - min) / (max - min)) * 100;
+    const raw = ((currentIV - min) / (max - min)) * 100;
+    return Math.max(0, Math.min(100, raw));
   }, [currentIV, historicalIVs]);
 
   // Calculate IV Percentile: % of days IV was lower than current
