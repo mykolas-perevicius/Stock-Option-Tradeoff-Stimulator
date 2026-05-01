@@ -309,64 +309,101 @@ export default function ControlPanel({
 
       {/* Main inputs grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Stock Price $</label>
-          <input
-            type="number"
-            value={currentPrice}
-            onChange={(e) => onCurrentPriceChange(Number(e.target.value) || 100)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="0.01"
-            min="0.01"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Strike Price $</label>
-          <input
-            type="number"
-            value={strikePrice}
-            onChange={(e) => onStrikePriceChange(Number(e.target.value) || 100)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1"
-            min="0.01"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Days to Expiry</label>
-          <input
-            type="number"
-            value={daysToExpiry}
-            onChange={(e) => onDaysToExpiryChange(Number(e.target.value) || 30)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1"
-            min="1"
-            max="730"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Risk-Free Rate %</label>
-          <input
-            type="number"
-            value={riskFreeRate}
-            onChange={(e) => onRiskFreeRateChange(Number(e.target.value) || 5)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="0.1"
-            min="0"
-            max="20"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Investment $</label>
-          <input
-            type="number"
-            value={investmentAmount}
-            onChange={(e) => onInvestmentAmountChange(Number(e.target.value) || 10000)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
-            step="1000"
-            min="100"
-          />
-        </div>
+        <NumberInput
+          label="Stock Price $"
+          value={currentPrice}
+          onChange={onCurrentPriceChange}
+          step={0.01}
+          min={0.01}
+        />
+        <NumberInput
+          label="Strike Price $"
+          value={strikePrice}
+          onChange={onStrikePriceChange}
+          step={1}
+          min={0.01}
+        />
+        <NumberInput
+          label="Days to Expiry"
+          value={daysToExpiry}
+          onChange={onDaysToExpiryChange}
+          step={1}
+          min={1}
+          max={730}
+          integer
+        />
+        <NumberInput
+          label="Risk-Free Rate %"
+          value={riskFreeRate}
+          onChange={onRiskFreeRateChange}
+          step={0.1}
+          min={0}
+          max={20}
+        />
+        <NumberInput
+          label="Investment $"
+          value={investmentAmount}
+          onChange={onInvestmentAmountChange}
+          step={1000}
+          min={100}
+        />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Number input that:
+ *  - Lets the user type freely (including transient empty / partial like "0.")
+ *    without snapping back to a default mid-keystroke.
+ *  - Only fires onChange when the value is a finite number — silently ignores
+ *    junk like "1e999" → Infinity, "abc" → NaN.
+ *  - Clamps to [min, max] only on blur, so typing "5" toward "50" doesn't
+ *    bounce against a min of 10.
+ */
+function NumberInput({ label, value, onChange, step, min, max, integer = false }) {
+  const [draft, setDraft] = useState(String(value ?? ''));
+
+  useEffect(() => {
+    setDraft(String(value ?? ''));
+  }, [value]);
+
+  const commit = (raw) => {
+    if (raw === '' || raw === '-' || raw === '.') return;
+    const n = integer ? parseInt(raw, 10) : Number(raw);
+    if (!Number.isFinite(n)) return;
+    let clamped = n;
+    if (typeof min === 'number' && clamped < min) clamped = min;
+    if (typeof max === 'number' && clamped > max) clamped = max;
+    onChange(clamped);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <input
+        type="number"
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          // Only push valid intermediate values upstream so charts redraw
+          // live, but skip empties / partial typing.
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) commit(e.target.value);
+        }}
+        onBlur={(e) => {
+          if (e.target.value === '' || !Number.isFinite(Number(e.target.value))) {
+            // Empty / invalid on blur — restore last good value from prop.
+            setDraft(String(value ?? ''));
+          } else {
+            commit(e.target.value);
+          }
+        }}
+        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm"
+        step={step}
+        min={min}
+        max={max}
+      />
     </div>
   );
 }

@@ -38,6 +38,14 @@ export default function ValuationPage() {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
+      // Reset per-symbol derived state so that if the user moves from a
+      // ticker with options to one without (or fetchOptionsChain throws and
+      // hits the inner catch), we don't keep showing the previous symbol's
+      // IV / fundamentals / earnings.
+      setCurrentIV(null);
+      setFundamentals(null);
+      setEarnings(null);
+      setHistoricalData(null);
 
       try {
         // Fetch all data in parallel

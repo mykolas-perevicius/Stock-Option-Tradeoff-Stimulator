@@ -1,5 +1,5 @@
 // Statistics calculations for risk/reward analysis
-import { calculateVaR, calculateExpectedShortfall, priceForReturn, probAbove, findCrossoverPrice } from './probability';
+import { calculateVaR, calculateExpectedShortfall, priceForReturn, probAbove, findCrossoverPrice, stockProbability } from './probability';
 
 /**
  * Calculate comprehensive statistics for stock vs options comparison
@@ -261,8 +261,6 @@ export function generateChartData(params) {
     }
     const optionPL = optionIntrinsic - totalPremiumPaid;
 
-    // Probability at this price
-    const { stockProbability } = require('./probability');
     const prob = stockProbability(price, currentPrice, T, r, sigma) * priceStep;
 
     points.push({

@@ -42,7 +42,11 @@ export default function MultiStrikePanel({
       const strikePrice = Math.round(currentPrice * (1 + offset / 100));
       const premium = optionPrice(currentPrice, strikePrice, T, r, sigma, isCall);
       const breakeven = breakevenPrice(strikePrice, premium, isCall);
-      const contracts = Math.max(1, Math.floor(investmentAmount / (premium * 100)));
+      // Deep-OTM low-sigma combos make premium → ~0; without a floor the
+      // contract count blows up to Infinity and the table shows "$Infinity".
+      const contracts = premium > 0.01
+        ? Math.max(1, Math.floor(investmentAmount / (premium * 100)))
+        : 1;
       const totalCost = contracts * premium * 100;
 
       // Calculate probability of profit

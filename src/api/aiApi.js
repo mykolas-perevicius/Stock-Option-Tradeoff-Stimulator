@@ -307,7 +307,7 @@ export function getFallbackInterpretation(analysisData) {
 
 **To Make Money:** The stock needs to ${direction} ${aboveBelow} $${breakeven.toFixed(2)} by expiration. That's a **${movePercent}% move** from the current price of $${currentPrice}.
 
-**Key Insight:** The market is pricing in about ${(impliedVol * Math.sqrt(daysToExpiry/365) * 100).toFixed(1)}% worth of expected movement (based on ${impliedVol}% IV). If you think the stock will move more than this, the option may be underpriced. If you think it will move less, stock might be the better choice.
+**Key Insight:** The market is pricing in about ${(impliedVol * Math.sqrt(daysToExpiry/365)).toFixed(1)}% worth of expected movement (based on ${impliedVol}% IV). If you think the stock will move more than this, the option may be underpriced. If you think it will move less, stock might be the better choice.
 
 ---
 *This is educational content generated locally. AI analysis is currently unavailable.*`;

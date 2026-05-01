@@ -67,3 +67,5 @@ backend/venv/
 __pycache__/
 *.pyc
 .mcp.json
+.env*.local
+.playwright-mcp/

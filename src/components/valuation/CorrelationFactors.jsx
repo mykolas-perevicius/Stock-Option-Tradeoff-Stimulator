@@ -112,12 +112,13 @@ export default function CorrelationFactors({ fundamentals }) {
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="text-xs text-gray-500 mb-1">52W Change</div>
             <div className={`text-xl font-bold ${
-              fiftyTwoWeekChange > 0 ? 'text-green-400' : 'text-red-400'
+              fiftyTwoWeekChange == null
+                ? 'text-gray-400'
+                : fiftyTwoWeekChange >= 0 ? 'text-green-400' : 'text-red-400'
             }`}>
-              {fiftyTwoWeekChange
-                ? `${fiftyTwoWeekChange > 0 ? '+' : ''}${(fiftyTwoWeekChange * 100).toFixed(1)}%`
-                : 'N/A'
-              }
+              {fiftyTwoWeekChange == null
+                ? 'N/A'
+                : `${fiftyTwoWeekChange >= 0 ? '+' : ''}${(fiftyTwoWeekChange * 100).toFixed(1)}%`}
             </div>
           </div>
         </div>

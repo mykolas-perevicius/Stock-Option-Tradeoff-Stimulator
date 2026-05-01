@@ -182,7 +182,9 @@ export default function UserPredictionPanel({
           </div>
           <div className="text-sm text-gray-400">
             Expected price range: <span className="text-white font-mono">
-              ${(currentPrice - expectedMove?.move).toFixed(2)} - ${(currentPrice + expectedMove?.move).toFixed(2)}
+              {expectedMove
+                ? `$${(currentPrice - expectedMove.move).toFixed(2)} - $${(currentPrice + expectedMove.move).toFixed(2)}`
+                : '—'}
             </span>
           </div>
           <div className="text-xs text-gray-500">

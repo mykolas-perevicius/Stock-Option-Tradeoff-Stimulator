@@ -136,7 +136,7 @@ export default function AnalystTargets({ fundamentals }) {
         <div className="bg-gray-800 rounded-lg p-3 text-center">
           <div className="text-xs text-gray-500 mb-1">Upside Potential</div>
           <div className={`text-lg font-bold ${parseFloat(upsideToHigh) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            +{upsideToHigh}%
+            {parseFloat(upsideToHigh) >= 0 ? '+' : ''}{upsideToHigh}%
           </div>
           <div className="text-xs text-gray-600">to target high</div>
         </div>

@@ -30,14 +30,22 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserApiKeys(session.user.id);
-      }
-      setLoading(false);
-    });
+    // Get initial session. Without a catch, a Supabase outage / network
+    // failure leaves `loading` stuck on true forever and any auth-gated UI
+    // (like the user menu spinner) never resolves.
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          loadUserApiKeys(session.user.id);
+        }
+      })
+      .catch((err) => {
+        console.warn('Supabase getSession failed:', err?.message || err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = onAuthStateChange((_event, session) => {

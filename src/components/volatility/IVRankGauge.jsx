@@ -31,12 +31,17 @@ export default function IVRankGauge({ currentIV, historicalIVs }) {
     return (daysBelow / validIVs.length) * 100;
   }, [currentIV, historicalIVs]);
 
-  // Get min/max from historical data
+  // Get min/max from historical data. Guard against an all-zero series:
+  // Math.min/max with no args returns Infinity/-Infinity and renders as
+  // "Infinity%" in the 52-week range row.
   const { minIV, maxIV, avgIV } = useMemo(() => {
     if (!historicalIVs || historicalIVs.length === 0) {
       return { minIV: 0, maxIV: 100, avgIV: 50 };
     }
     const validIVs = historicalIVs.filter((iv) => iv > 0);
+    if (validIVs.length === 0) {
+      return { minIV: 0, maxIV: 100, avgIV: 50 };
+    }
     return {
       minIV: Math.min(...validIVs),
       maxIV: Math.max(...validIVs),

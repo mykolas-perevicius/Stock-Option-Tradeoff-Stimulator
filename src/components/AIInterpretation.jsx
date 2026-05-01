@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   generateInterpretation,
   getFallbackInterpretation,
@@ -34,6 +34,11 @@ export default function AIInterpretation({
   const [isConfigured, setIsConfigured] = useState(isGroqConfigured());
   const [provider, setProvider] = useState(null); // 'gemini', 'groq', or 'local'
 
+  // Latest-request guard. Without this, clicking Generate, switching symbols
+  // or strikes, then clicking Generate again can let the first (slow) call
+  // win the race and leave stale interpretation text in place.
+  const requestIdRef = useRef(0);
+
   // Check configuration on mount and load API keys
   useEffect(() => {
     loadApiKeys();
@@ -54,22 +59,23 @@ export default function AIInterpretation({
   };
 
   const handleGenerate = useCallback(async () => {
+    const reqId = ++requestIdRef.current;
     setIsLoading(true);
     setError(null);
     setProvider(null);
 
     try {
-      // generateInterpretation tries Gemini -> Groq -> Local fallback
       const result = await generateInterpretation(analysisData);
+      if (reqId !== requestIdRef.current) return;
       setInterpretation(result.text);
       setProvider(result.provider);
     } catch (err) {
+      if (reqId !== requestIdRef.current) return;
       setError(err.message);
-      // Show fallback on error
       setInterpretation(getFallbackInterpretation(analysisData));
       setProvider('local');
     } finally {
-      setIsLoading(false);
+      if (reqId === requestIdRef.current) setIsLoading(false);
     }
   }, [symbol, currentPrice, strikePrice, premium, breakeven, daysToExpiry, impliedVol, isCall, stats]);
 

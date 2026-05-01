@@ -3,6 +3,12 @@ yfinance Backend Server
 Provides stock quote data using the yfinance Python library
 """
 
+import asyncio
+import math
+import os
+import re
+from datetime import date, datetime, timezone
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,14 +21,47 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend access
+# Locked-down CORS. Open wildcard + the public hosting let strangers proxy
+# yfinance through this dyno, which Yahoo eventually rate-limits the host IP
+# for. Override with EXTRA_CORS_ORIGINS=comma,separated for staging URLs.
+_DEFAULT_ORIGINS = [
+    "https://stocksandoptions.org",
+    "https://www.stocksandoptions.org",
+    "https://stock-options-simulator.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:4173",
+]
+_EXTRA = [o.strip() for o in os.getenv("EXTRA_CORS_ORIGINS", "").split(",") if o.strip()]
+_ALLOWED_ORIGINS = _DEFAULT_ORIGINS + _EXTRA
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your frontend domain
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Symbol whitelist. Uppercase letters, digits, dots (BRK.B), dashes (BRK-B),
+# carets (^GSPC). Anything else is rejected before we touch yfinance to avoid
+# log injection, weird path traversal characters, and pointless cold-fetches.
+_SYMBOL_RE = re.compile(r"^[A-Z0-9.\-^]{1,12}$")
+
+def _safe_symbol(symbol: str) -> str:
+    upper = (symbol or "").upper().strip()
+    if not _SYMBOL_RE.match(upper):
+        raise HTTPException(status_code=400, detail="Invalid symbol format")
+    return upper
+
+
+def _safe_error(e: Exception, fallback: str = "Upstream data error") -> str:
+    """Sanitize exception messages so we don't echo URLs/headers/proxies back to
+    the client. yfinance errors often contain the request URL with the user's
+    symbol embedded — fine, but we strip newlines and cap length."""
+    msg = str(e) if e else fallback
+    return msg.replace("\n", " ").replace("\r", " ")[:200] or fallback
 
 
 class QuoteResponse(BaseModel):
@@ -86,46 +125,63 @@ class OptionsChainResponse(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Lightweight liveness check.
+
+    We deliberately do NOT touch yfinance here — Render's healthcheck pings
+    this often, and a flaky upstream shouldn't take the dyno down. The
+    frontend treats 200 as 'dyno is warm,' which is exactly what this proves.
+    """
     return {"status": "healthy", "service": "yfinance-backend"}
+
+
+def _fetch_quote_sync(symbol: str) -> dict:
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    if not price:
+        raise HTTPException(status_code=404, detail=f"No data found for symbol: {symbol}")
+    return {
+        "symbol": symbol,
+        "price": price,
+        "previousClose": info.get("previousClose", price),
+        "open": info.get("open") or info.get("regularMarketOpen"),
+        "dayHigh": info.get("dayHigh") or info.get("regularMarketDayHigh"),
+        "dayLow": info.get("dayLow") or info.get("regularMarketDayLow"),
+        "volume": info.get("volume") or info.get("regularMarketVolume"),
+        "marketCap": info.get("marketCap"),
+        "shortName": info.get("shortName"),
+        "longName": info.get("longName"),
+        "currency": info.get("currency", "USD"),
+        "exchange": info.get("exchange"),
+        "fiftyTwoWeekHigh": info.get("fiftyTwoWeekHigh"),
+        "fiftyTwoWeekLow": info.get("fiftyTwoWeekLow"),
+        "averageVolume": info.get("averageVolume"),
+        "beta": info.get("beta"),
+    }
 
 
 @app.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(symbol: str):
-    """
-    Get stock quote for a given symbol
-    """
+    """Get stock quote for a given symbol."""
+    sym = _safe_symbol(symbol)
     try:
-        ticker = yf.Ticker(symbol.upper())
-        info = ticker.info
-
-        # Check if we got valid data
-        price = info.get("currentPrice") or info.get("regularMarketPrice")
-        if not price:
-            raise HTTPException(status_code=404, detail=f"No data found for symbol: {symbol}")
-
-        return QuoteResponse(
-            symbol=symbol.upper(),
-            price=price,
-            previousClose=info.get("previousClose", price),
-            open=info.get("open") or info.get("regularMarketOpen"),
-            dayHigh=info.get("dayHigh") or info.get("regularMarketDayHigh"),
-            dayLow=info.get("dayLow") or info.get("regularMarketDayLow"),
-            volume=info.get("volume") or info.get("regularMarketVolume"),
-            marketCap=info.get("marketCap"),
-            shortName=info.get("shortName"),
-            longName=info.get("longName"),
-            currency=info.get("currency", "USD"),
-            exchange=info.get("exchange"),
-            fiftyTwoWeekHigh=info.get("fiftyTwoWeekHigh"),
-            fiftyTwoWeekLow=info.get("fiftyTwoWeekLow"),
-            averageVolume=info.get("averageVolume"),
-            beta=info.get("beta"),
-        )
+        data = await asyncio.to_thread(_fetch_quote_sync, sym)
+        return QuoteResponse(**data)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
+
+
+def _ny_today() -> date:
+    """Today in America/New_York. Render runs UTC; using server-local UTC
+    'today' makes a Tuesday's regular weekly look 0-DTE on Monday evening US.
+    Falling back to UTC if zoneinfo unavailable still beats the prior bug."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/New_York")).date()
+    except Exception:
+        return datetime.now(timezone.utc).date()
 
 
 def _pick_target_expiration(expirations, target_dte: int = 30, min_dte: int = 7):
@@ -140,9 +196,7 @@ def _pick_target_expiration(expirations, target_dte: int = 30, min_dte: int = 7)
     - Pick the expiration nearest to target_dte (default 30 — typical analyst
       horizon and what most option calculators imply by "the IV").
     """
-    from datetime import date
-
-    today = date.today()
+    today = _ny_today()
     candidates = []
     for exp_str in expirations:
         try:
@@ -162,6 +216,93 @@ def _pick_target_expiration(expirations, target_dte: int = 30, min_dte: int = 7)
     return candidates[0][0]
 
 
+def _normalize_dividend_yield(raw):
+    """yfinance has flip-flopped on this field across versions.
+    >=0.2.31 returns it in percent (0.44 = 0.44%); older versions returned
+    it as a decimal (0.0044 = 0.44%). Use the value, not the version: any
+    value > 1 is implausible as a decimal yield (would be >100% annual) so
+    treat it as percent and divide; otherwise it's already decimal.
+    Returns None for None/non-numeric/zero (zero-yield non-payers should not
+    render '0.00% dividend'; CorrelationFactors hides on falsy)."""
+    if raw is None or not isinstance(raw, (int, float)) or raw <= 0:
+        return None
+    return raw / 100 if raw > 1 else raw
+
+
+def _format_ex_div(raw):
+    """yfinance returns exDividendDate as Unix epoch int. Send ISO date so
+    the frontend doesn't have to know it's epoch seconds."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)) and raw > 0:
+        try:
+            return datetime.fromtimestamp(int(raw), tz=timezone.utc).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    s = str(raw)
+    return s if s and s != "None" else None
+
+
+def _fetch_iv_sync(symbol: str, dte: int) -> dict:
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
+    current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+    if not current_price:
+        raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
+
+    expirations = ticker.options
+    if not expirations:
+        beta = info.get("beta", 1.0) or 1.0
+        estimated_iv = 20 + (beta - 1) * 15
+        return {
+            "symbol": symbol,
+            "iv": round(max(15, min(80, estimated_iv)), 1),
+            "source": "estimated_from_beta",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    target_exp = _pick_target_expiration(expirations, target_dte=dte, min_dte=7)
+    if target_exp is None:
+        raise HTTPException(status_code=404, detail=f"No usable expirations for {symbol}")
+
+    chain = ticker.option_chain(target_exp)
+    calls = chain.calls
+    if calls.empty:
+        raise HTTPException(status_code=404, detail=f"No options data for symbol: {symbol}")
+
+    calls = calls.copy()
+    calls['distance'] = (calls['strike'] - current_price).abs()
+    atm_row = calls.loc[calls['distance'].idxmin()]
+
+    iv = atm_row.get('impliedVolatility', 0.30)
+    if iv and iv < 1:
+        iv = iv * 100
+
+    # Sanity floor: ATM IV under 5% on an equity is almost certainly bad
+    # data (e.g. yfinance returning a zero-volume contract). Fall through
+    # to a beta-based estimate rather than confusing the user.
+    if not iv or iv < 5:
+        beta = info.get("beta", 1.0) or 1.0
+        estimated_iv = 20 + (beta - 1) * 15
+        return {
+            "symbol": symbol,
+            "iv": round(max(15, min(80, estimated_iv)), 1),
+            "atmStrike": float(atm_row['strike']),
+            "expirationDate": target_exp,
+            "source": "estimated_from_beta",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    return {
+        "symbol": symbol,
+        "iv": round(iv, 1),
+        "atmStrike": float(atm_row['strike']),
+        "expirationDate": target_exp,
+        "source": "options_chain",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/iv/{symbol}", response_model=IVResponse)
 async def get_implied_volatility(symbol: str, dte: int = 30):
     """
@@ -170,84 +311,27 @@ async def get_implied_volatility(symbol: str, dte: int = 30):
     days out (default 30). Skips 0-DTE / same-week expirations whose IV is
     artificially low.
     """
-    from datetime import datetime
-
+    sym = _safe_symbol(symbol)
+    # Clamp dte to a sane window so users can't ask for negative or 50-year DTE.
+    dte = max(1, min(int(dte), 730))
     try:
-        ticker = yf.Ticker(symbol.upper())
-
-        # Get current price for ATM calculation
-        info = ticker.info
-        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
-        if not current_price:
-            raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
-
-        # Get available expiration dates
-        expirations = ticker.options
-        if not expirations:
-            # No options available - return estimated IV based on beta
-            beta = info.get("beta", 1.0) or 1.0
-            estimated_iv = 20 + (beta - 1) * 15  # Higher beta = higher IV
-            return IVResponse(
-                symbol=symbol.upper(),
-                iv=round(max(15, min(80, estimated_iv)), 1),
-                source="estimated_from_beta",
-                timestamp=datetime.now().isoformat()
-            )
-
-        target_exp = _pick_target_expiration(expirations, target_dte=dte, min_dte=7)
-        if target_exp is None:
-            raise HTTPException(status_code=404, detail=f"No usable expirations for {symbol}")
-
-        chain = ticker.option_chain(target_exp)
-        calls = chain.calls
-
-        if calls.empty:
-            raise HTTPException(status_code=404, detail=f"No options data for symbol: {symbol}")
-
-        # Find ATM strike (closest to current price)
-        calls = calls.copy()
-        calls['distance'] = abs(calls['strike'] - current_price)
-        atm_row = calls.loc[calls['distance'].idxmin()]
-
-        iv = atm_row.get('impliedVolatility', 0.30)
-        # yfinance gives IV as a decimal (0.25 = 25%); convert to percent.
-        if iv and iv < 1:
-            iv = iv * 100
-
-        # Sanity floor: ATM IV under 5% on an equity is almost certainly bad
-        # data (e.g. yfinance returning a zero-volume contract). Fall through
-        # to a beta-based estimate rather than confusing the user.
-        if not iv or iv < 5:
-            beta = info.get("beta", 1.0) or 1.0
-            estimated_iv = 20 + (beta - 1) * 15
-            return IVResponse(
-                symbol=symbol.upper(),
-                iv=round(max(15, min(80, estimated_iv)), 1),
-                atmStrike=float(atm_row['strike']),
-                expirationDate=target_exp,
-                source="estimated_from_beta",
-                timestamp=datetime.now().isoformat()
-            )
-
-        return IVResponse(
-            symbol=symbol.upper(),
-            iv=round(iv, 1),
-            atmStrike=float(atm_row['strike']),
-            expirationDate=target_exp,
-            source="options_chain",
-            timestamp=datetime.now().isoformat()
-        )
-
+        return IVResponse(**(await asyncio.to_thread(_fetch_iv_sync, sym, dte)))
     except HTTPException:
         raise
     except Exception as e:
-        from datetime import datetime
+        # Last-resort fallback so the page still renders something sensible
+        # — but flag the source so the client can warn rather than displaying
+        # 30% as if it were a real reading.
         return IVResponse(
-            symbol=symbol.upper(),
+            symbol=sym,
             iv=30.0,
             source="fallback",
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
+
+
+_VALID_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
+_VALID_INTERVALS = {"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"}
 
 
 @app.get("/search")
@@ -256,12 +340,16 @@ async def search_symbols(q: str):
     Search for stock symbols
     Note: yfinance doesn't have a direct search API, so this is limited
     """
+    if not q or len(q) > 12:
+        return {"results": []}
     try:
-        # yfinance doesn't have a search endpoint, so we try to get info
-        # for the query as a symbol and return it if found
-        ticker = yf.Ticker(q.upper())
-        info = ticker.info
+        sym = _safe_symbol(q)
+    except HTTPException:
+        return {"results": []}
 
+    def _do():
+        ticker = yf.Ticker(sym)
+        info = ticker.info
         if info.get("symbol"):
             return {
                 "results": [{
@@ -272,153 +360,157 @@ async def search_symbols(q: str):
                     "quoteType": info.get("quoteType"),
                 }]
             }
-
         return {"results": []}
+
+    try:
+        return await asyncio.to_thread(_do)
     except Exception:
         return {"results": []}
 
 
+def _fetch_history_sync(symbol: str, period: str, interval: str) -> dict:
+    ticker = yf.Ticker(symbol)
+    hist = ticker.history(period=period, interval=interval)
+    if hist.empty:
+        raise HTTPException(status_code=404, detail=f"No history for symbol: {symbol}")
+    data = []
+    for index, row in hist.iterrows():
+        data.append({
+            "date": index.isoformat(),
+            "open": row.get("Open"),
+            "high": row.get("High"),
+            "low": row.get("Low"),
+            "close": row.get("Close"),
+            "volume": row.get("Volume"),
+        })
+    return {"symbol": symbol, "data": data}
+
+
 @app.get("/history/{symbol}")
 async def get_history(symbol: str, period: str = "1mo", interval: str = "1d"):
-    """
-    Get historical price data for a symbol
-
-    period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-    interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-    """
+    """Get historical price data for a symbol."""
+    sym = _safe_symbol(symbol)
+    if period not in _VALID_PERIODS:
+        raise HTTPException(status_code=400, detail="Invalid period")
+    if interval not in _VALID_INTERVALS:
+        raise HTTPException(status_code=400, detail="Invalid interval")
     try:
-        ticker = yf.Ticker(symbol.upper())
-        hist = ticker.history(period=period, interval=interval)
-
-        if hist.empty:
-            raise HTTPException(status_code=404, detail=f"No history for symbol: {symbol}")
-
-        # Convert to list of dicts
-        data = []
-        for index, row in hist.iterrows():
-            data.append({
-                "date": index.isoformat(),
-                "open": row.get("Open"),
-                "high": row.get("High"),
-                "low": row.get("Low"),
-                "close": row.get("Close"),
-                "volume": row.get("Volume"),
-            })
-
-        return {"symbol": symbol.upper(), "data": data}
+        return await asyncio.to_thread(_fetch_history_sync, sym, period, interval)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
 
 
 @app.get("/options/{symbol}/expirations")
 async def get_options_expirations(symbol: str):
-    """
-    Get available options expiration dates for a symbol
-    """
-    try:
-        ticker = yf.Ticker(symbol.upper())
-        expirations = ticker.options
+    """Get available options expiration dates for a symbol."""
+    sym = _safe_symbol(symbol)
 
+    def _do():
+        ticker = yf.Ticker(sym)
+        expirations = ticker.options
         if not expirations:
             raise HTTPException(
                 status_code=404,
-                detail=f"No options available for symbol: {symbol}"
+                detail=f"No options available for symbol: {sym}"
             )
+        return {"symbol": sym, "expirations": list(expirations)}
 
-        return {
-            "symbol": symbol.upper(),
-            "expirations": list(expirations)
-        }
+    try:
+        return await asyncio.to_thread(_do)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
+
+
+def _safe_int(val):
+    """Coerce a yfinance numeric (which can be a numpy float, NaN, or None)
+    into an int, or return None. Avoids 'cannot convert NaN to int' crashes."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f):
+        return None
+    return int(f)
+
+
+def _fetch_options_chain_sync(symbol: str, expiry: Optional[str]) -> dict:
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
+    current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+    if not current_price:
+        raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
+
+    expirations = ticker.options
+    if not expirations:
+        raise HTTPException(status_code=404, detail=f"No options available for symbol: {symbol}")
+
+    if expiry and expiry in expirations:
+        selected_expiry = expiry
+    elif expiry:
+        # User asked for a specific expiry that doesn't exist — be loud about
+        # it instead of silently substituting a different one.
+        raise HTTPException(status_code=400, detail=f"Expiry {expiry} not available for {symbol}")
+    else:
+        selected_expiry = _pick_target_expiration(expirations, target_dte=30, min_dte=7) \
+            or expirations[0]
+
+    chain = ticker.option_chain(selected_expiry)
+
+    def process_options(df):
+        result = []
+        for _, row in df.iterrows():
+            iv = row.get('impliedVolatility', 0)
+            if iv and iv < 1:
+                iv = iv * 100
+
+            def clean_value(val):
+                if val is None or (isinstance(val, float) and math.isnan(val)):
+                    return None
+                return val
+
+            result.append({
+                "contractSymbol": row.get('contractSymbol', ''),
+                "strike": float(row.get('strike', 0)),
+                "lastPrice": clean_value(row.get('lastPrice')),
+                "bid": clean_value(row.get('bid')),
+                "ask": clean_value(row.get('ask')),
+                "change": clean_value(row.get('change')),
+                "percentChange": clean_value(row.get('percentChange')),
+                "volume": _safe_int(row.get('volume')),
+                "openInterest": _safe_int(row.get('openInterest')),
+                "impliedVolatility": round(iv, 2) if iv else None,
+                "inTheMoney": bool(row.get('inTheMoney')) if 'inTheMoney' in row else None,
+            })
+        return result
+
+    return {
+        "symbol": symbol,
+        "expiry": selected_expiry,
+        "expirations": list(expirations),
+        "underlyingPrice": current_price,
+        "calls": process_options(chain.calls),
+        "puts": process_options(chain.puts),
+    }
 
 
 @app.get("/options/{symbol}", response_model=OptionsChainResponse)
 async def get_options_chain(symbol: str, expiry: str = None):
-    """
-    Get full options chain for a symbol.
-    If expiry is not provided, returns the nearest expiration.
-    """
-    import math
-
+    """Get full options chain. Default expiry is ~30 DTE (skips 0-DTE weeklies
+    whose IV / pricing is artificially distorted)."""
+    sym = _safe_symbol(symbol)
     try:
-        ticker = yf.Ticker(symbol.upper())
-
-        # Get current price
-        info = ticker.info
-        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
-        if not current_price:
-            raise HTTPException(status_code=404, detail=f"No price data for symbol: {symbol}")
-
-        # Get available expirations
-        expirations = ticker.options
-        if not expirations:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No options available for symbol: {symbol}"
-            )
-
-        # Use provided expiry or default to a ~30-day expiration (skipping 0-DTE
-        # weeklies whose IV / pricing is artificially distorted).
-        if expiry and expiry in expirations:
-            selected_expiry = expiry
-        else:
-            selected_expiry = _pick_target_expiration(expirations, target_dte=30, min_dte=7) \
-                or expirations[0]
-
-        # Get options chain
-        chain = ticker.option_chain(selected_expiry)
-
-        def process_options(df):
-            """Convert options dataframe to list of dicts with clean values"""
-            result = []
-            for _, row in df.iterrows():
-                # Get IV and convert to percentage if needed
-                iv = row.get('impliedVolatility', 0)
-                if iv and iv < 1:
-                    iv = iv * 100
-
-                # Handle NaN values
-                def clean_value(val):
-                    if val is None or (isinstance(val, float) and math.isnan(val)):
-                        return None
-                    return val
-
-                result.append({
-                    "contractSymbol": row.get('contractSymbol', ''),
-                    "strike": float(row.get('strike', 0)),
-                    "lastPrice": clean_value(row.get('lastPrice')),
-                    "bid": clean_value(row.get('bid')),
-                    "ask": clean_value(row.get('ask')),
-                    "change": clean_value(row.get('change')),
-                    "percentChange": clean_value(row.get('percentChange')),
-                    "volume": int(row.get('volume', 0)) if row.get('volume') and not math.isnan(row.get('volume')) else None,
-                    "openInterest": int(row.get('openInterest', 0)) if row.get('openInterest') and not math.isnan(row.get('openInterest')) else None,
-                    "impliedVolatility": round(iv, 2) if iv else None,
-                    "inTheMoney": bool(row.get('inTheMoney')) if 'inTheMoney' in row else None,
-                })
-            return result
-
-        calls = process_options(chain.calls)
-        puts = process_options(chain.puts)
-
-        return OptionsChainResponse(
-            symbol=symbol.upper(),
-            expiry=selected_expiry,
-            expirations=list(expirations),
-            underlyingPrice=current_price,
-            calls=calls,
-            puts=puts,
-        )
-
+        data = await asyncio.to_thread(_fetch_options_chain_sync, sym, expiry)
+        return OptionsChainResponse(**data)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
 
 
 class FundamentalsResponse(BaseModel):
@@ -478,22 +570,16 @@ class FundamentalsResponse(BaseModel):
     fiftyTwoWeekChange: Optional[float] = None
 
 
-@app.get("/fundamentals/{symbol}", response_model=FundamentalsResponse)
-async def get_fundamentals(symbol: str):
-    """
-    Get fundamental financial metrics for a stock.
-    Includes valuation, profitability, analyst targets, and risk metrics.
-    """
-    try:
-        ticker = yf.Ticker(symbol.upper())
-        info = ticker.info
+def _fetch_fundamentals_sync(symbol: str) -> dict:
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
 
-        current_price = info.get("currentPrice") or info.get("regularMarketPrice")
-        if not current_price:
-            raise HTTPException(status_code=404, detail=f"No data found for symbol: {symbol}")
+    current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+    if not current_price:
+        raise HTTPException(status_code=404, detail=f"No data found for symbol: {symbol}")
 
-        return FundamentalsResponse(
-            symbol=symbol.upper(),
+    return dict(
+            symbol=symbol,
             currentPrice=current_price,
             # Valuation
             trailingPE=info.get("trailingPE"),
@@ -535,15 +621,14 @@ async def get_fundamentals(symbol: str):
             # Classification
             sector=info.get("sector"),
             industry=info.get("industry"),
-            # Dividends. yfinance >=0.2.31 returns dividendYield in PERCENT
-            # form (0.44 means 0.44%, not 44%), unlike profitMargins / ROE /
-            # etc. which stay as decimals. The frontend assumes decimal and
-            # multiplies by 100, which produced "AAPL dividend yield: 38%"
-            # (real value ~0.4%). Normalize to decimal here.
-            dividendYield=(info.get("dividendYield") / 100) if isinstance(info.get("dividendYield"), (int, float)) else info.get("dividendYield"),
+            # Dividends. yfinance has shifted between decimal and percent
+            # representations of this field across versions. Normalize by
+            # value: anything > 1 must be percent (real yields don't exceed
+            # 100% per year), anything <= 1 is already decimal.
+            dividendYield=_normalize_dividend_yield(info.get("dividendYield")),
             dividendRate=info.get("dividendRate"),
             payoutRatio=info.get("payoutRatio"),
-            exDividendDate=str(info.get("exDividendDate")) if info.get("exDividendDate") else None,
+            exDividendDate=_format_ex_div(info.get("exDividendDate")),
             # Growth
             revenueGrowth=info.get("revenueGrowth"),
             earningsGrowth=info.get("earningsGrowth"),
@@ -553,10 +638,18 @@ async def get_fundamentals(symbol: str):
             fiftyTwoWeekChange=info.get("52WeekChange"),
         )
 
+
+@app.get("/fundamentals/{symbol}", response_model=FundamentalsResponse)
+async def get_fundamentals(symbol: str):
+    """Get fundamental financial metrics for a stock."""
+    sym = _safe_symbol(symbol)
+    try:
+        data = await asyncio.to_thread(_fetch_fundamentals_sync, sym)
+        return FundamentalsResponse(**data)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
 
 
 class EarningsResponse(BaseModel):
@@ -568,80 +661,95 @@ class EarningsResponse(BaseModel):
     earningsEstimate: Optional[dict] = None
 
 
+def _safe_val(v):
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return None
+    return v
+
+
+def _fetch_earnings_sync(symbol: str) -> dict:
+    ticker = yf.Ticker(symbol)
+
+    earnings_dates = None
+    try:
+        ed = ticker.earnings_dates
+        if ed is not None and not ed.empty:
+            earnings_dates = []
+            for idx, row in ed.head(12).iterrows():
+                # Surprise column has been renamed across yfinance versions
+                # ("Surprise(%)", "Surprise %", "Surprise"). Probe all of them.
+                surprise = None
+                for col in ("Surprise(%)", "Surprise %", "Surprise"):
+                    if col in row:
+                        surprise = _safe_val(row.get(col))
+                        if surprise is not None:
+                            break
+                earnings_dates.append({
+                    "date": idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                    "epsEstimate": _safe_val(row.get("EPS Estimate")),
+                    "epsActual": _safe_val(row.get("Reported EPS")),
+                    "surprise": surprise,
+                })
+    except Exception:
+        pass
+
+    next_earnings = None
+    try:
+        calendar = ticker.calendar
+        if isinstance(calendar, dict):
+            ed_val = calendar.get("Earnings Date")
+            if ed_val:
+                first = ed_val[0] if isinstance(ed_val, list) and ed_val else ed_val
+                next_earnings = first.isoformat() if hasattr(first, 'isoformat') else str(first)
+    except Exception:
+        pass
+
+    quarterly = None
+    try:
+        qe = ticker.quarterly_earnings
+        if qe is not None and not qe.empty:
+            quarterly = []
+            for idx, row in qe.iterrows():
+                quarterly.append({
+                    "quarter": str(idx),
+                    "revenue": _safe_val(row.get("Revenue")),
+                    "earnings": _safe_val(row.get("Earnings")),
+                })
+    except Exception:
+        pass
+
+    # If we got literally nothing back for an unknown ticker, surface a 404
+    # rather than a hollow 200 that the frontend renders as "no earnings."
+    if earnings_dates is None and next_earnings is None and quarterly is None:
+        # Verify the symbol actually resolves to a tradeable instrument.
+        try:
+            info = ticker.info
+            if not (info.get("currentPrice") or info.get("regularMarketPrice")):
+                raise HTTPException(status_code=404, detail=f"Unknown symbol: {symbol}")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=404, detail=f"Unknown symbol: {symbol}")
+
+    return {
+        "symbol": symbol,
+        "nextEarningsDate": next_earnings,
+        "earningsHistory": earnings_dates,
+        "quarterlyEarnings": quarterly,
+    }
+
+
 @app.get("/earnings/{symbol}", response_model=EarningsResponse)
 async def get_earnings(symbol: str):
-    """
-    Get earnings history and upcoming earnings dates for a stock.
-    Includes historical earnings surprises and next earnings date.
-    """
-    import math
-    from datetime import datetime
-
+    """Get earnings history and upcoming earnings dates for a stock."""
+    sym = _safe_symbol(symbol)
     try:
-        ticker = yf.Ticker(symbol.upper())
-
-        # Get earnings dates
-        earnings_dates = None
-        try:
-            ed = ticker.earnings_dates
-            if ed is not None and not ed.empty:
-                earnings_dates = []
-                for idx, row in ed.head(12).iterrows():  # Last 12 entries
-                    def safe_val(v):
-                        if v is None or (isinstance(v, float) and math.isnan(v)):
-                            return None
-                        return v
-
-                    earnings_dates.append({
-                        "date": idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
-                        "epsEstimate": safe_val(row.get("EPS Estimate")),
-                        "epsActual": safe_val(row.get("Reported EPS")),
-                        "surprise": safe_val(row.get("Surprise(%)")),
-                    })
-        except Exception:
-            pass
-
-        # Get next earnings date from calendar
-        next_earnings = None
-        try:
-            calendar = ticker.calendar
-            if calendar is not None:
-                if isinstance(calendar, dict):
-                    ed_val = calendar.get("Earnings Date")
-                    if ed_val:
-                        if isinstance(ed_val, list) and len(ed_val) > 0:
-                            next_earnings = str(ed_val[0])
-                        else:
-                            next_earnings = str(ed_val)
-        except Exception:
-            pass
-
-        # Get quarterly earnings
-        quarterly = None
-        try:
-            qe = ticker.quarterly_earnings
-            if qe is not None and not qe.empty:
-                quarterly = []
-                for idx, row in qe.iterrows():
-                    quarterly.append({
-                        "quarter": str(idx),
-                        "revenue": row.get("Revenue"),
-                        "earnings": row.get("Earnings"),
-                    })
-        except Exception:
-            pass
-
-        return EarningsResponse(
-            symbol=symbol.upper(),
-            nextEarningsDate=next_earnings,
-            earningsHistory=earnings_dates,
-            quarterlyEarnings=quarterly,
-        )
-
+        data = await asyncio.to_thread(_fetch_earnings_sync, sym)
+        return EarningsResponse(**data)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502, detail=_safe_error(e))
 
 
 if __name__ == "__main__":

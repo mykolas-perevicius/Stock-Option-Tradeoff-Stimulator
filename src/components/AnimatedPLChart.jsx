@@ -76,7 +76,11 @@ export default function AnimatedPLChart({
     // Calculate position sizing based on original premium
     const originalT = Math.max(0.001, daysToExpiry / 365);
     const originalPremium = optionPrice(currentPrice, strikePrice, originalT, r, sigma, isCall);
-    const contractsOwned = Math.max(1, Math.floor(investmentAmount / (originalPremium * 100)));
+    // Guard against premium → 0 (deep-OTM, sigma → 0) producing Infinity
+    // contracts, which then renders as "$Infinity" everywhere downstream.
+    const contractsOwned = originalPremium > 0.01
+      ? Math.max(1, Math.floor(investmentAmount / (originalPremium * 100)))
+      : 1;
     const optionShares = contractsOwned * 100;
     const totalPremiumPaid = contractsOwned * originalPremium * 100;
     const sharesOwned = investmentAmount / currentPrice;

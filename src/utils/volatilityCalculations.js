@@ -72,13 +72,10 @@ export function parkinsonVolatility(ohlcData) {
 export function garmanKlassVolatility(ohlcData) {
   if (!ohlcData || ohlcData.length < 2) return 0;
 
+  // Standard Garman-Klass: σ² = (1/n) Σ [0.5·ln(H/L)² − (2·ln 2 − 1)·ln(C/O)²]
   const sum = ohlcData.reduce((s, d) => {
     if (d.open > 0 && d.high > 0 && d.low > 0 && d.close > 0) {
-      const u = Math.log(d.high / d.open);
-      const d_val = Math.log(d.low / d.open);
       const c = Math.log(d.close / d.open);
-
-      // Garman-Klass formula
       return s + 0.5 * Math.pow(Math.log(d.high / d.low), 2) - (2 * Math.log(2) - 1) * Math.pow(c, 2);
     }
     return s;

@@ -13,7 +13,14 @@ export default function HistoricalAccuracy({
 }) {
   // Calculate historical realized volatility for the same time period
   const analysis = useMemo(() => {
-    if (!historicalData?.ohlcData || historicalData.ohlcData.length < 30) {
+    // Need a meaningful number of rolling windows. With period == DTE, the
+    // loop produces (data.length - period) windows; we want at least ~10
+    // distinct samples for the percentile bar and exceed-rate to be sane.
+    if (
+      !historicalData?.ohlcData
+      || historicalData.ohlcData.length < 30
+      || historicalData.ohlcData.length <= daysToExpiry + 10
+    ) {
       return null;
     }
 
@@ -112,7 +119,11 @@ export default function HistoricalAccuracy({
     return (
       <div className="bg-gray-900/50 rounded-lg p-6 text-center text-gray-400">
         <p>Insufficient historical data for accuracy analysis.</p>
-        <p className="text-sm mt-2">Need at least 30 days of price history.</p>
+        <p className="text-sm mt-2">
+          Need at least 30 days of price history, with more than {daysToExpiry + 10}{' '}
+          days to compute rolling {daysToExpiry}-day windows. Try a shorter
+          DTE or a longer history period.
+        </p>
       </div>
     );
   }

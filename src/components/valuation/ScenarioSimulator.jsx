@@ -7,7 +7,18 @@ import React, { useState, useMemo } from 'react';
 export default function ScenarioSimulator({ fundamentals }) {
   const [selectedScenario, setSelectedScenario] = useState(0);
 
-  if (!fundamentals || !fundamentals.currentPrice || !fundamentals.trailingPE) {
+  // Need positive P/E and positive EPS for the EPS×P/E projection to make
+  // any sense. Negative P/E means unprofitable: a "+20% EPS beat" on
+  // negative earnings makes the loss bigger, but multiplying by a negative
+  // P/E flips the sign and produces a misleading "stock goes up" projection.
+  const epsForCheck = fundamentals?.trailingEps ?? fundamentals?.forwardEps;
+  if (
+    !fundamentals?.currentPrice
+    || !fundamentals?.trailingPE
+    || fundamentals.trailingPE <= 0
+    || !epsForCheck
+    || epsForCheck <= 0
+  ) {
     return (
       <div className="bg-gray-900 rounded-lg p-4">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -15,7 +26,10 @@ export default function ScenarioSimulator({ fundamentals }) {
         </h3>
         <div className="text-center py-8 text-gray-500">
           Insufficient data for scenario analysis.
-          <p className="text-sm mt-2">P/E ratio or current price not available.</p>
+          <p className="text-sm mt-2">
+            Needs positive P/E and positive EPS — this stock is unprofitable
+            or P/E data is unavailable.
+          </p>
         </div>
       </div>
     );

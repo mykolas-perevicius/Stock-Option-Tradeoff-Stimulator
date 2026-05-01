@@ -17,12 +17,23 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 // Fluid Compute reuses instances, so this is meaningfully effective per region.
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 30;
+const HITS_MAX_KEYS = 5000;
 const hits = new Map();
 function rateLimited(ip) {
   const now = Date.now();
   const arr = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
   arr.push(now);
   hits.set(ip, arr);
+
+  // Cap the map so a long-lived instance with many unique IPs doesn't grow
+  // unbounded. Drop the oldest insertion order when over the limit.
+  if (hits.size > HITS_MAX_KEYS) {
+    const firstKey = hits.keys().next().value;
+    if (firstKey !== undefined) hits.delete(firstKey);
+  }
+  // Also evict any IP whose entire window has expired.
+  if (arr.length === 0) hits.delete(ip);
+
   return arr.length > MAX_PER_WINDOW;
 }
 

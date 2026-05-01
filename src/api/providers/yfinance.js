@@ -98,12 +98,23 @@ export const yfinanceProvider = {
         throw new Error(data.error);
       }
 
+      const price = Number.isFinite(data.price) ? data.price : null;
+      if (price === null) {
+        throw new Error(`No price returned for ${upperSymbol}`);
+      }
+      // previousClose can be missing on new IPOs / halted symbols; fall back to
+      // current price so downstream change/changePercent come out as 0 instead
+      // of NaN/Infinity polluting every component that displays them.
+      const prevClose = Number.isFinite(data.previousClose) && data.previousClose > 0
+        ? data.previousClose
+        : price;
+
       const quote = {
         symbol: upperSymbol,
-        price: Math.round(data.price * 100) / 100,
-        previousClose: Math.round(data.previousClose * 100) / 100,
-        change: Math.round((data.price - data.previousClose) * 100) / 100,
-        changePercent: Math.round(((data.price - data.previousClose) / data.previousClose) * 10000) / 100,
+        price: Math.round(price * 100) / 100,
+        previousClose: Math.round(prevClose * 100) / 100,
+        change: Math.round((price - prevClose) * 100) / 100,
+        changePercent: Math.round(((price - prevClose) / prevClose) * 10000) / 100,
         high: data.dayHigh,
         low: data.dayLow,
         open: data.open,
