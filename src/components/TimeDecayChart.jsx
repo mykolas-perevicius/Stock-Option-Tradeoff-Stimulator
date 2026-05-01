@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -32,6 +32,13 @@ export default function TimeDecayChart({
   const [viewDays, setViewDays] = useState(daysToExpiry);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(true);
+
+  // If parent reduces daysToExpiry below the current view position, the
+  // slider's max would clip but viewDays would still hold the larger value
+  // (slider visually pegs at max but state lies).
+  useEffect(() => {
+    if (viewDays > daysToExpiry) setViewDays(daysToExpiry);
+  }, [daysToExpiry, viewDays]);
 
   // Generate P&L data for a specific day
   const generatePLData = useCallback((days) => {
@@ -69,31 +76,39 @@ export default function TimeDecayChart({
     return () => clearInterval(interval);
   }, [isAnimating]);
 
-  // Current view data
-  const currentData = generatePLData(viewDays);
+  // Snapshot definitions.
+  const snapshots = useMemo(() => {
+    if (!showSnapshots) return [];
+    return [
+      { days: daysToExpiry, color: '#10B981', label: `T (${daysToExpiry}d)` },
+      { days: Math.max(1, Math.floor(daysToExpiry * 0.5)), color: '#3B82F6', label: `T/2 (${Math.floor(daysToExpiry * 0.5)}d)` },
+      { days: Math.max(1, Math.floor(daysToExpiry * 0.25)), color: '#F59E0B', label: `T/4 (${Math.floor(daysToExpiry * 0.25)}d)` },
+      { days: 1, color: '#EF4444', label: 'Expiry (1d)' },
+    ].filter((s) => s.days <= daysToExpiry);
+  }, [showSnapshots, daysToExpiry]);
 
-  // Snapshot data for comparison
-  const snapshots = showSnapshots
-    ? [
-        { days: daysToExpiry, color: '#10B981', label: `T (${daysToExpiry}d)` },
-        { days: Math.max(1, Math.floor(daysToExpiry * 0.5)), color: '#3B82F6', label: `T/2 (${Math.floor(daysToExpiry * 0.5)}d)` },
-        { days: Math.max(1, Math.floor(daysToExpiry * 0.25)), color: '#F59E0B', label: `T/4 (${Math.floor(daysToExpiry * 0.25)}d)` },
-        { days: 1, color: '#EF4444', label: 'Expiry (1d)' },
-      ].filter((s) => s.days <= daysToExpiry)
-    : [];
+  // Compute each snapshot's P&L curve ONCE per render, then index by price.
+  // The previous implementation called generatePLData(snap.days) inside a
+  // map over every price point — quadratic work that dominated render time
+  // when the slider moved while snapshots were on (~50 prices × 4 snapshots
+  // × 50 inner price loops = 10k Black-Scholes calls per frame).
+  const snapshotCurves = useMemo(
+    () => snapshots.map((s) => ({ days: s.days, points: generatePLData(s.days) })),
+    [snapshots, generatePLData]
+  );
 
-  // Merge snapshot data
-  const mergedData = currentData.map((point) => {
+  const currentData = useMemo(() => generatePLData(viewDays), [generatePLData, viewDays]);
+
+  const mergedData = useMemo(() => currentData.map((point, i) => {
     const merged = { ...point };
-    snapshots.forEach((snap) => {
-      const snapData = generatePLData(snap.days);
-      const snapPoint = snapData.find((p) => p.price === point.price);
-      if (snapPoint) {
-        merged[`pl_${snap.days}d`] = snapPoint.optionPL;
-      }
+    snapshotCurves.forEach(({ days, points }) => {
+      // Both curves share the same price grid (same min/max/step), so we
+      // can index by position instead of doing a string-equality .find().
+      const snapPoint = points[i];
+      if (snapPoint) merged[`pl_${days}d`] = snapPoint.optionPL;
     });
     return merged;
-  });
+  }), [currentData, snapshotCurves]);
 
   // Calculate current option value
   const currentT = Math.max(0.001, viewDays / 365);
