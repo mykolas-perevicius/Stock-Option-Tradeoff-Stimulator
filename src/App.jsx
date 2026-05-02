@@ -783,7 +783,7 @@ export default function App() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-800 pb-2">
+        <div role="tablist" aria-label="Analysis sections" className="flex flex-wrap gap-2 mb-4 border-b border-gray-800 pb-2">
           {[
             { id: 'analysis', label: 'Risk/Reward' },
             { id: 'compare', label: 'Compare Strikes' },
@@ -793,6 +793,9 @@ export default function App() {
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm rounded-t transition-colors ${
                 activeTab === tab.id

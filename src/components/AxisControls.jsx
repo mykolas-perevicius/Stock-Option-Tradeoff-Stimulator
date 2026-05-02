@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { priceAtSigma } from '../utils/probability';
 
 // Small controlled number input that:
@@ -7,12 +7,14 @@ import { priceAtSigma } from '../utils/probability';
 //  - Reverts to the prop value on blur if left empty/invalid.
 function NumberField({ label, value, step, min, onCommit }) {
   const [draft, setDraft] = useState(String(value ?? ''));
+  const id = useId();
   useEffect(() => { setDraft(String(value ?? '')); }, [value]);
 
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs text-gray-400 mb-1">{label}</label>
       <input
+        id={id}
         type="number"
         value={draft}
         onChange={(e) => {

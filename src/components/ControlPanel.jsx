@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { formatPrice } from '../utils/statistics';
 import APIProviderSelector from './APIProviderSelector';
 
@@ -80,19 +80,26 @@ export default function ControlPanel({
     <div className="bg-gray-900 rounded-lg p-4 mb-4">
       {/* Symbol search with status */}
       <div className="mb-4">
-        <form onSubmit={handleSymbolSubmit} className="flex gap-2">
+        <form onSubmit={handleSymbolSubmit} className="flex gap-2" aria-label="Stock symbol lookup">
           <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">Stock Symbol</label>
+            <label htmlFor="symbol-input" className="block text-xs text-gray-400 mb-1">Stock Symbol</label>
             <div className="relative">
               <input
+                id="symbol-input"
                 type="text"
                 value={symbolInput}
                 onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
                 placeholder="AAPL, TSLA, SPY..."
+                aria-describedby="quote-status"
                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm uppercase pr-20"
               />
-              {/* Status badge */}
-              <span className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-xs font-medium text-white ${getStatusColor()}`}>
+              {/* Status badge — announced to screen readers when it changes */}
+              <span
+                id="quote-status"
+                role="status"
+                aria-live="polite"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded text-xs font-medium text-white ${getStatusColor()}`}
+              >
                 {getStatusText()}
               </span>
             </div>
@@ -140,11 +147,13 @@ export default function ControlPanel({
 
       {/* Quick stock buttons */}
       <div className="mb-4">
-        <label className="block text-xs text-gray-400 mb-1">Popular Stocks</label>
-        <div className="flex flex-wrap gap-2">
+        <span id="popular-stocks-label" className="block text-xs text-gray-400 mb-1">Popular Stocks</span>
+        <div role="group" aria-labelledby="popular-stocks-label" className="flex flex-wrap gap-2">
           {['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'SPY'].map((sym) => (
             <button
               key={sym}
+              type="button"
+              aria-pressed={symbol === sym}
               onClick={() => {
                 setSymbolInput(sym);
                 onSymbolChange(sym);
@@ -166,8 +175,9 @@ export default function ControlPanel({
       {/* Presets dropdown */}
       {presets && presets.length > 0 && (
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-1">Educational Scenarios</label>
+          <label htmlFor="preset-select" className="block text-xs text-gray-400 mb-1">Educational Scenarios</label>
           <select
+            id="preset-select"
             onChange={(e) => e.target.value && onLoadPreset(e.target.value)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
             defaultValue=""
@@ -185,9 +195,11 @@ export default function ControlPanel({
       {/* Stock Position Toggle */}
       {stockPosition !== undefined && (
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-1">Stock Position</label>
-          <div className="flex rounded overflow-hidden border border-gray-600">
+          <span id="stock-position-label" className="block text-xs text-gray-400 mb-1">Stock Position</span>
+          <div role="group" aria-labelledby="stock-position-label" className="flex rounded overflow-hidden border border-gray-600">
             <button
+              type="button"
+              aria-pressed={stockPosition === 'long'}
               onClick={() => onStockPositionChange('long')}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 stockPosition === 'long'
@@ -198,6 +210,8 @@ export default function ControlPanel({
               Long Stock (Buy)
             </button>
             <button
+              type="button"
+              aria-pressed={stockPosition === 'short'}
               onClick={() => onStockPositionChange('short')}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 stockPosition === 'short'
@@ -220,9 +234,11 @@ export default function ControlPanel({
       {/* Option Position Selector (4-way) */}
       {optionPosition !== undefined && (
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-1">Option Position</label>
-          <div className="grid grid-cols-2 gap-2">
+          <span id="option-position-label" className="block text-xs text-gray-400 mb-1">Option Position</span>
+          <div role="group" aria-labelledby="option-position-label" className="grid grid-cols-2 gap-2">
             <button
+              type="button"
+              aria-pressed={optionPosition === 'long' && isCall}
               onClick={() => { onOptionPositionChange('long'); onIsCallChange(true); }}
               className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
                 optionPosition === 'long' && isCall
@@ -233,6 +249,8 @@ export default function ControlPanel({
               Buy Call
             </button>
             <button
+              type="button"
+              aria-pressed={optionPosition === 'short' && isCall}
               onClick={() => { onOptionPositionChange('short'); onIsCallChange(true); }}
               className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
                 optionPosition === 'short' && isCall
@@ -240,9 +258,11 @@ export default function ControlPanel({
                   : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'
               }`}
             >
-              Sell Call ⚠️
+              Sell Call <span aria-label="warning">⚠️</span>
             </button>
             <button
+              type="button"
+              aria-pressed={optionPosition === 'long' && !isCall}
               onClick={() => { onOptionPositionChange('long'); onIsCallChange(false); }}
               className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
                 optionPosition === 'long' && !isCall
@@ -253,6 +273,8 @@ export default function ControlPanel({
               Buy Put
             </button>
             <button
+              type="button"
+              aria-pressed={optionPosition === 'short' && !isCall}
               onClick={() => { onOptionPositionChange('short'); onIsCallChange(false); }}
               className={`py-2 px-3 text-sm font-medium rounded border transition-colors ${
                 optionPosition === 'short' && !isCall
@@ -281,9 +303,11 @@ export default function ControlPanel({
       {/* Legacy Call/Put Toggle - only show if position props not provided */}
       {optionPosition === undefined && (
         <div className="mb-4">
-          <label className="block text-xs text-gray-400 mb-1">Option Type</label>
-          <div className="flex rounded overflow-hidden border border-gray-600">
+          <span id="option-type-label" className="block text-xs text-gray-400 mb-1">Option Type</span>
+          <div role="group" aria-labelledby="option-type-label" className="flex rounded overflow-hidden border border-gray-600">
             <button
+              type="button"
+              aria-pressed={isCall}
               onClick={() => onIsCallChange(true)}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 isCall
@@ -294,6 +318,8 @@ export default function ControlPanel({
               Call (Bullish)
             </button>
             <button
+              type="button"
+              aria-pressed={!isCall}
               onClick={() => onIsCallChange(false)}
               className={`flex-1 py-2 text-sm font-medium transition-colors ${
                 !isCall
@@ -363,6 +389,7 @@ export default function ControlPanel({
  */
 function NumberInput({ label, value, onChange, step, min, max, integer = false }) {
   const [draft, setDraft] = useState(String(value ?? ''));
+  const id = useId();
 
   useEffect(() => {
     setDraft(String(value ?? ''));
@@ -380,8 +407,9 @@ function NumberInput({ label, value, onChange, step, min, max, integer = false }
 
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs text-gray-400 mb-1">{label}</label>
       <input
+        id={id}
         type="number"
         value={draft}
         onChange={(e) => {
