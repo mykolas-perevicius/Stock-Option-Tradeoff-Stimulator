@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 // Utils
@@ -9,20 +9,31 @@ import { calculateStats, formatCurrency, formatPrice, expectedMoveToIV, ivToExpe
 import { parseURLParams, exportToPNG, exportToCSV, exportToPDF, copyShareableURL } from './utils/exportHelpers';
 import { getAllVolatilities as calculateAllVolatilities } from './utils/volatilityCalculations';
 
-// Components
+// Components rendered immediately on first paint stay eagerly imported.
 import ControlPanel from './components/ControlPanel';
 import AxisControls from './components/AxisControls';
 import PLChart from './components/PLChart';
 import ProbabilityChart from './components/ProbabilityChart';
 import GreeksPanel from './components/GreeksPanel';
 import RiskRewardPanel from './components/RiskRewardPanel';
-import TimeDecayChart from './components/TimeDecayChart';
-import ScenarioPanel from './components/ScenarioPanel';
 import ExportMenu from './components/ExportMenu';
-import MultiStrikePanel from './components/MultiStrikePanel';
-import AIInterpretation from './components/AIInterpretation';
 import AnimatedPLChart from './components/AnimatedPLChart';
 import VolatilityControls from './components/VolatilityControls';
+
+// Tab content + AI panel only render when the user clicks into them. Lazy
+// load so they don't bloat the initial bundle.
+const TimeDecayChart = lazy(() => import('./components/TimeDecayChart'));
+const ScenarioPanel = lazy(() => import('./components/ScenarioPanel'));
+const MultiStrikePanel = lazy(() => import('./components/MultiStrikePanel'));
+const AIInterpretation = lazy(() => import('./components/AIInterpretation'));
+
+function TabLoader() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+    </div>
+  );
+}
 // APIProviderSelector is now embedded in ControlPanel
 import UserMenu from './components/Auth/UserMenu';
 import AuthModal from './components/Auth/AuthModal';
@@ -818,34 +829,38 @@ export default function App() {
               stockPosition={stockPosition}
               optionPosition={optionPosition}
             />
-            <AIInterpretation
-              symbol={symbol}
-              currentPrice={currentPrice}
-              strikePrice={strikePrice}
-              premium={premium}
-              breakeven={breakeven}
-              daysToExpiry={daysToExpiry}
-              impliedVol={marketIV}
-              isCall={isCall}
-              stats={stats}
-              greeks={greeks}
-            />
+            <Suspense fallback={<TabLoader />}>
+              <AIInterpretation
+                symbol={symbol}
+                currentPrice={currentPrice}
+                strikePrice={strikePrice}
+                premium={premium}
+                breakeven={breakeven}
+                daysToExpiry={daysToExpiry}
+                impliedVol={marketIV}
+                isCall={isCall}
+                stats={stats}
+                greeks={greeks}
+              />
+            </Suspense>
           </div>
         )}
 
         {activeTab === 'compare' && (
-          <MultiStrikePanel
-            currentPrice={currentPrice}
-            daysToExpiry={daysToExpiry}
-            marketIV={marketIV}
-            sigma={sigma}
-            riskFreeRate={riskFreeRate}
-            investmentAmount={investmentAmount}
-            isCall={isCall}
-            minPrice={minPrice}
-            maxPrice={maxPrice}
-            userExpectedMove={userExpectedMove}
-          />
+          <Suspense fallback={<TabLoader />}>
+            <MultiStrikePanel
+              currentPrice={currentPrice}
+              daysToExpiry={daysToExpiry}
+              marketIV={marketIV}
+              sigma={sigma}
+              riskFreeRate={riskFreeRate}
+              investmentAmount={investmentAmount}
+              isCall={isCall}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              userExpectedMove={userExpectedMove}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'greeks' && (
@@ -861,35 +876,39 @@ export default function App() {
         )}
 
         {activeTab === 'decay' && (
-          <TimeDecayChart
-            currentPrice={currentPrice}
-            strikePrice={strikePrice}
-            daysToExpiry={daysToExpiry}
-            r={r}
-            sigma={sigma}
-            isCall={isCall}
-            premium={premium}
-            optionShares={optionShares}
-            totalPremiumPaid={totalPremiumPaid}
-            minPrice={minPrice}
-            maxPrice={maxPrice}
-          />
+          <Suspense fallback={<TabLoader />}>
+            <TimeDecayChart
+              currentPrice={currentPrice}
+              strikePrice={strikePrice}
+              daysToExpiry={daysToExpiry}
+              r={r}
+              sigma={sigma}
+              isCall={isCall}
+              premium={premium}
+              optionShares={optionShares}
+              totalPremiumPaid={totalPremiumPaid}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'scenarios' && (
-          <ScenarioPanel
-            currentPrice={currentPrice}
-            strikePrice={strikePrice}
-            daysToExpiry={daysToExpiry}
-            impliedVol={userImpliedIV}
-            riskFreeRate={riskFreeRate}
-            investmentAmount={investmentAmount}
-            isCall={isCall}
-            premium={premium}
-            sharesOwned={sharesOwned}
-            optionShares={optionShares}
-            totalPremiumPaid={totalPremiumPaid}
-          />
+          <Suspense fallback={<TabLoader />}>
+            <ScenarioPanel
+              currentPrice={currentPrice}
+              strikePrice={strikePrice}
+              daysToExpiry={daysToExpiry}
+              impliedVol={userImpliedIV}
+              riskFreeRate={riskFreeRate}
+              investmentAmount={investmentAmount}
+              isCall={isCall}
+              premium={premium}
+              sharesOwned={sharesOwned}
+              optionShares={optionShares}
+              totalPremiumPaid={totalPremiumPaid}
+            />
+          </Suspense>
         )}
 
         {/* Footer */}
