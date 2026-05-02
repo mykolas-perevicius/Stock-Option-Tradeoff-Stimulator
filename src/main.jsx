@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { VolatilityPredictionProvider } from './contexts/VolatilityPredictionContext.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import './index.css'
@@ -29,21 +30,23 @@ function PageLoading() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <VolatilityPredictionProvider>
-        <BrowserRouter>
-          <Suspense fallback={<PageLoading />}>
-            <Routes>
-              <Route path="/" element={<App />} />
-              <Route path="/options" element={<OptionsPage />} />
-              <Route path="/volatility" element={<VolatilityPage />} />
-              <Route path="/valuation" element={<ValuationPage />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Analytics />
-        <SpeedInsights />
-      </VolatilityPredictionProvider>
-    </AuthProvider>
+    <ErrorBoundary scope="the application">
+      <AuthProvider>
+        <VolatilityPredictionProvider>
+          <BrowserRouter>
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                <Route path="/" element={<ErrorBoundary scope="the simulator"><App /></ErrorBoundary>} />
+                <Route path="/options" element={<ErrorBoundary scope="the options page"><OptionsPage /></ErrorBoundary>} />
+                <Route path="/volatility" element={<ErrorBoundary scope="the volatility page"><VolatilityPage /></ErrorBoundary>} />
+                <Route path="/valuation" element={<ErrorBoundary scope="the valuation page"><ValuationPage /></ErrorBoundary>} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Analytics />
+          <SpeedInsights />
+        </VolatilityPredictionProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
