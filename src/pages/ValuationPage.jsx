@@ -125,33 +125,33 @@ export default function ValuationPage() {
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-xl font-bold">Valuation Estimator</h1>
-            <p className="text-gray-500 text-xs">
+          <div className="min-w-0 mr-3">
+            <h1 className="text-base sm:text-xl font-bold">Valuation Estimator</h1>
+            <p className="text-gray-500 text-[11px] sm:text-xs hidden sm:block">
               Fundamental analysis and expected move estimation
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             {user?.email && (
-              <span className="text-sm text-gray-400">
+              <span className="text-xs sm:text-sm text-gray-400 hidden md:inline">
                 {user.email}
               </span>
             )}
             <Link
               to="/options"
-              className="px-4 py-2 text-sm bg-blue-700 hover:bg-blue-600 rounded-lg transition-colors"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-700 hover:bg-blue-600 rounded-lg transition-colors"
             >
-              Options Analysis
+              Options
             </Link>
             <Link
               to="/volatility"
-              className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-600 rounded-lg transition-colors"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-purple-700 hover:bg-purple-600 rounded-lg transition-colors"
             >
               Volatility
             </Link>
             <Link
               to="/"
-              className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
             >
               Simulator
             </Link>
@@ -159,7 +159,7 @@ export default function ValuationPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4">
+      <main className="max-w-7xl mx-auto p-2 sm:p-4">
         {/* Symbol Input */}
         <div className="bg-gray-900/50 rounded-lg p-4 mb-6">
           <div className="flex flex-wrap items-end gap-4">

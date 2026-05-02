@@ -592,30 +592,30 @@ export default function App() {
 
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Stock vs Options Simulator</h1>
-            <p className="text-gray-500 text-xs">Black-Scholes pricing • Log-normal distribution • Academic analysis</p>
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-y-2">
+          <div className="min-w-0 mr-3">
+            <h1 className="text-base sm:text-xl font-bold">Stock vs Options Simulator</h1>
+            <p className="text-gray-500 text-[11px] sm:text-xs hidden sm:block">Black-Scholes pricing • Log-normal distribution • Academic analysis</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {user && (
               <SavedSetups currentState={currentState} onLoadSetup={handleLoadSetup} />
             )}
             <Link
               to="/volatility"
-              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
             >
               Volatility
             </Link>
             <Link
               to="/options"
-              className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors"
             >
-              Options Data
+              Options
             </Link>
             <Link
               to="/valuation"
-              className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
             >
               Valuation
             </Link>
@@ -634,7 +634,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4">
+      <main className="max-w-7xl mx-auto p-2 sm:p-4">
         {/* Volatility Controls - Always visible at top (MARKET VIEW - read-only) */}
         <VolatilityControls
           marketIV={marketIV}
