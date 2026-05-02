@@ -64,6 +64,21 @@ def _safe_error(e: Exception, fallback: str = "Upstream data error") -> str:
     return msg.replace("\n", " ").replace("\r", " ")[:200] or fallback
 
 
+# Per-request timeout for yfinance calls. Render free tier kills requests at
+# 30s anyway, but bounding here lets us return a clean 504 instead of a
+# connection drop, and prevents one stalled call from consuming a worker slot
+# for the full uvicorn timeout window.
+_YF_TIMEOUT_SEC = 25.0
+
+
+async def _run_with_timeout(fn, *args, timeout: float = _YF_TIMEOUT_SEC):
+    """Run a sync yfinance call in a thread with a hard timeout."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn, *args), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Upstream data source timed out")
+
+
 class QuoteResponse(BaseModel):
     symbol: str
     price: float
@@ -165,7 +180,7 @@ async def get_quote(symbol: str):
     """Get stock quote for a given symbol."""
     sym = _safe_symbol(symbol)
     try:
-        data = await asyncio.to_thread(_fetch_quote_sync, sym)
+        data = await _run_with_timeout(_fetch_quote_sync, sym)
         return QuoteResponse(**data)
     except HTTPException:
         raise
@@ -314,7 +329,7 @@ async def get_implied_volatility(symbol: str, dte: int = 30):
     # Clamp dte to a sane window so users can't ask for negative or 50-year DTE.
     dte = max(1, min(int(dte), 730))
     try:
-        return IVResponse(**(await asyncio.to_thread(_fetch_iv_sync, sym, dte)))
+        return IVResponse(**(await _run_with_timeout(_fetch_iv_sync, sym, dte)))
     except HTTPException:
         raise
     except Exception as e:
@@ -362,7 +377,10 @@ async def search_symbols(q: str):
         return {"results": []}
 
     try:
-        return await asyncio.to_thread(_do)
+        return await _run_with_timeout(_do, timeout=10.0)
+    except HTTPException:
+        # Timeouts on search are non-fatal — empty result is the safe default.
+        return {"results": []}
     except Exception:
         return {"results": []}
 
@@ -394,7 +412,7 @@ async def get_history(symbol: str, period: str = "1mo", interval: str = "1d"):
     if interval not in _VALID_INTERVALS:
         raise HTTPException(status_code=400, detail="Invalid interval")
     try:
-        return await asyncio.to_thread(_fetch_history_sync, sym, period, interval)
+        return await _run_with_timeout(_fetch_history_sync, sym, period, interval)
     except HTTPException:
         raise
     except Exception as e:
@@ -417,7 +435,7 @@ async def get_options_expirations(symbol: str):
         return {"symbol": sym, "expirations": list(expirations)}
 
     try:
-        return await asyncio.to_thread(_do)
+        return await _run_with_timeout(_do)
     except HTTPException:
         raise
     except Exception as e:
@@ -453,8 +471,14 @@ def _fetch_options_chain_sync(symbol: str, expiry: Optional[str]) -> dict:
         selected_expiry = expiry
     elif expiry:
         # User asked for a specific expiry that doesn't exist — be loud about
-        # it instead of silently substituting a different one.
-        raise HTTPException(status_code=400, detail=f"Expiry {expiry} not available for {symbol}")
+        # it instead of silently substituting a different one. Don't echo the
+        # raw user value back; restrict to ISO-date shape so log injection
+        # / weird payloads can't make it into our response body.
+        safe_exp = re.sub(r"[^0-9\-]", "", str(expiry))[:10] or "(invalid)"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Expiry '{safe_exp}' not available for {symbol}"
+        )
     else:
         selected_expiry = _pick_target_expiration(expirations, target_dte=30, min_dte=7) \
             or expirations[0]
@@ -473,9 +497,20 @@ def _fetch_options_chain_sync(symbol: str, expiry: Optional[str]) -> dict:
                     return None
                 return val
 
+            # Skip rows where strike isn't a usable number — pandas can yield
+            # NaN here, and OptionContract.strike is non-Optional, so a NaN
+            # would 500 the entire response.
+            raw_strike = row.get('strike')
+            try:
+                strike = float(raw_strike)
+                if math.isnan(strike) or strike <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+
             result.append({
                 "contractSymbol": row.get('contractSymbol', ''),
-                "strike": float(row.get('strike', 0)),
+                "strike": strike,
                 "lastPrice": clean_value(row.get('lastPrice')),
                 "bid": clean_value(row.get('bid')),
                 "ask": clean_value(row.get('ask')),
@@ -504,7 +539,7 @@ async def get_options_chain(symbol: str, expiry: str = None):
     whose IV / pricing is artificially distorted)."""
     sym = _safe_symbol(symbol)
     try:
-        data = await asyncio.to_thread(_fetch_options_chain_sync, sym, expiry)
+        data = await _run_with_timeout(_fetch_options_chain_sync, sym, expiry)
         return OptionsChainResponse(**data)
     except HTTPException:
         raise
@@ -643,7 +678,7 @@ async def get_fundamentals(symbol: str):
     """Get fundamental financial metrics for a stock."""
     sym = _safe_symbol(symbol)
     try:
-        data = await asyncio.to_thread(_fetch_fundamentals_sync, sym)
+        data = await _run_with_timeout(_fetch_fundamentals_sync, sym)
         return FundamentalsResponse(**data)
     except HTTPException:
         raise
@@ -743,7 +778,7 @@ async def get_earnings(symbol: str):
     """Get earnings history and upcoming earnings dates for a stock."""
     sym = _safe_symbol(symbol)
     try:
-        data = await asyncio.to_thread(_fetch_earnings_sync, sym)
+        data = await _run_with_timeout(_fetch_earnings_sync, sym)
         return EarningsResponse(**data)
     except HTTPException:
         raise
